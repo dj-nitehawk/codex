@@ -225,6 +225,18 @@ impl App {
         {
             return;
         }
+        if let ServerNotification::TurnStarted(started) = &notification
+            && self
+                .handoff
+                .as_ref()
+                .is_some_and(|pending| pending.thread_id.to_string() == started.thread_id)
+        {
+            self.cancel_handoff();
+            self.chat_widget.add_info_message(
+                "Handoff cancelled because the parent conversation changed.".to_string(),
+                None,
+            );
+        }
         // Hidden helper threads must not enter visible thread routing or overview refreshes.
         let target = server_notification_thread_target(&notification);
         if let ServerNotificationThreadTarget::Thread(thread_id) = target

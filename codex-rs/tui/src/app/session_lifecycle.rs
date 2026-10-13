@@ -545,7 +545,9 @@ impl App {
     /// This helper copies every known nickname/role from `AgentNavigationState` into the
     /// replacement widget so that replayed collab items render agent names immediately.
     pub(super) fn replace_chat_widget(&mut self, mut chat_widget: ChatWidget) {
+        self.cancel_handoff();
         chat_widget.inherit_view_transition_key_guard(&mut self.chat_widget);
+
         chat_widget.fork_in_progress = self.chat_widget.fork_in_progress;
         self.pending_right_click_paste = None;
         self.config_notification_test_pending = None;
@@ -1260,6 +1262,55 @@ impl App {
             }
             Err(err) => {
                 self.chat_widget.add_error_message(err.to_string());
+                if let Some(message) = initial_user_message {
+                    self.chat_widget.restore_user_message_to_composer(message);
+                }
+            }
+        }
+        tui.frame_requester().schedule_frame();
+    }
+
+    /// Start a fresh thread with staged settings instead of reloading new-session defaults.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn start_fresh_session_with_config(
+        &mut self,
+        tui: &mut tui::Tui,
+        app_server: &mut AppServerSession,
+        config: Config,
+        local_settings: crate::local_settings::LocalSettings,
+        session_start_source: Option<ThreadStartSource>,
+        initial_user_message: Option<crate::chatwidget::UserMessage>,
+        new_thread_name: Option<String>,
+    ) {
+        match crate::boxed_future!(app_server.start_thread_with_session_start_source(
+            &self.local_settings,
+            &config,
+            session_start_source,
+            /*remote_cwd_override*/ None,
+            /*selected_profile*/ None,
+            self.backend_preference_context.local_cwd.as_deref(),
+        ))
+        .await
+        {
+            Ok(started) => {
+                self.adopt_fresh_session(
+                    tui,
+                    app_server,
+                    PreparedFreshSession {
+                        started,
+                        config,
+                        local_settings,
+                    },
+                    ThreadAttachPresentation::Fresh,
+                    initial_user_message,
+                    new_thread_name,
+                )
+                .await;
+            }
+            Err(err) => {
+                self.chat_widget.add_error_message(format!(
+                    "Failed to start a fresh session through the app server: {err}"
+                ));
                 if let Some(message) = initial_user_message {
                     self.chat_widget.restore_user_message_to_composer(message);
                 }
