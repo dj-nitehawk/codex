@@ -16,13 +16,15 @@ use crate::app_event::AppEvent;
 static LOGGER: LazyLock<SessionLogger> = LazyLock::new(SessionLogger::new);
 
 struct SessionLogger {
-    file: OnceLock<Mutex<File>>,
+    file: OnceLock<Mutex<Option<File>>>,
+    path: OnceLock<PathBuf>,
 }
 
 impl SessionLogger {
     fn new() -> Self {
         Self {
             file: OnceLock::new(),
+            path: OnceLock::new(),
         }
     }
 
@@ -40,8 +42,9 @@ impl SessionLogger {
             opts.mode(0o600);
         }
 
-        let file = opts.open(path)?;
-        self.file.get_or_init(|| Mutex::new(file));
+        let file = opts.open(&path)?;
+        self.file.get_or_init(|| Mutex::new(Some(file)));
+        self.path.get_or_init(|| path);
         Ok(())
     }
 
@@ -53,17 +56,20 @@ impl SessionLogger {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
+        let Some(file) = guard.as_mut() else {
+            return;
+        };
         match serde_json::to_string(&value) {
             Ok(serialized) => {
-                if let Err(e) = guard.write_all(serialized.as_bytes()) {
+                if let Err(e) = file.write_all(serialized.as_bytes()) {
                     tracing::warn!("session log write error: {}", e);
                     return;
                 }
-                if let Err(e) = guard.write_all(b"\n") {
+                if let Err(e) = file.write_all(b"\n") {
                     tracing::warn!("session log write error: {}", e);
                     return;
                 }
-                if let Err(e) = guard.flush() {
+                if let Err(e) = file.flush() {
                     tracing::warn!("session log flush error: {}", e);
                 }
             }
@@ -74,6 +80,23 @@ impl SessionLogger {
     fn is_enabled(&self) -> bool {
         self.file.get().is_some()
     }
+}
+
+/// Close and remove the current opt-in recording before local session cleanup.
+pub(crate) fn purge_recording() -> std::io::Result<()> {
+    if let Some(file) = LOGGER.file.get() {
+        file.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+    }
+    if let Some(path) = LOGGER.path.get() {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
 }
 
 fn now_ts() -> String {

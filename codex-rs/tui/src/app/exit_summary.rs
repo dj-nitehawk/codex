@@ -23,7 +23,12 @@ pub struct DisconnectInfo {
 
 impl App {
     pub(super) fn exit_info(&self, exit_reason: ExitReason) -> AppExitInfo {
-        let thread_id = self.chat_widget.thread_id().or(self.primary_thread_id);
+        let thread_id = match exit_reason {
+            ExitReason::Purged => None,
+            ExitReason::UserRequested | ExitReason::TurnInterrupted | ExitReason::Fatal(_) => {
+                self.chat_widget.thread_id().or(self.primary_thread_id)
+            }
+        };
         let disconnect_info = thread_id.and_then(|_| {
             let command = match &self.app_server_target {
                 AppServerTarget::Embedded => return None,
@@ -66,7 +71,11 @@ impl App {
                 self.chat_widget.rollout_path().as_deref(),
             ),
             disconnect_info,
-            update_action: self.pending_update_action,
+            update_action: if matches!(exit_reason, ExitReason::Purged) {
+                None
+            } else {
+                self.pending_update_action
+            },
             exit_reason,
         }
     }
@@ -75,6 +84,9 @@ impl App {
 impl AppExitInfo {
     /// Format the terminal summary for both the CLI and standalone TUI binaries.
     pub fn format_exit_messages(self, color_enabled: bool) -> Vec<String> {
+        if matches!(self.exit_reason, ExitReason::Purged) {
+            return vec!["All local saved sessions purged.".to_string()];
+        }
         let color_command = |command: String| {
             if color_enabled {
                 format!("\u{1b}[36m{command}\u{1b}[39m")
@@ -88,7 +100,7 @@ impl AppExitInfo {
         {
             let turn_interrupted = matches!(self.exit_reason, ExitReason::TurnInterrupted);
             let message = match self.exit_reason {
-                ExitReason::UserRequested => {
+                ExitReason::UserRequested | ExitReason::Purged => {
                     "Disconnected from this task. Any running work continues."
                 }
                 ExitReason::Fatal(_) => "Disconnected from this task. Work may still be running.",

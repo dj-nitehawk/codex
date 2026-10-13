@@ -771,6 +771,7 @@ fn handle_app_exit(
             true
         }
         ExitReason::UserRequested | ExitReason::TurnInterrupted => false,
+        ExitReason::Purged => false,
     };
 
     let update_action = exit_info.update_action;
