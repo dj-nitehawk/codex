@@ -658,6 +658,9 @@ pub(crate) enum AppEvent {
     /// Permanently delete the current active main thread and exit after it succeeds.
     DeleteCurrentThread,
 
+    /// Purge all local saved sessions after the embedded server has shut down.
+    PurgeSessions,
+
     /// Fork the current session into a new thread, optionally assigning it a name.
     ForkCurrentSession {
         name: Option<String>,

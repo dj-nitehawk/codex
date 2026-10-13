@@ -489,6 +489,38 @@ impl ChatWidget {
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_quit_without_confirmation();
             }
+            SlashCommand::Purge => {
+                if self.remote_connection.is_some() {
+                    self.add_error_message(
+                        "/purge requires a local embedded server. Restart Codex with --no-daemon."
+                            .to_string(),
+                    );
+                    return;
+                }
+                self.bottom_pane.show_selection_view(SelectionViewParams {
+                    title: Some("Purge ALL saved sessions and exit?".to_string()),
+                    subtitle: Some(format!(
+                        "Cannot be undone. Close other Codex instances first. Deletes active and archived sessions, history, logs, snapshots, and session memories in {}. Credentials, configuration, skills, and project files are kept.",
+                        self.config.codex_home.display(),
+                    )),
+                    footer_hint: Some(standard_popup_hint_line()),
+                    items: vec![
+                        SelectionItem {
+                            name: "No, keep my sessions".to_string(),
+                            dismiss_on_select: true,
+                            ..Default::default()
+                        },
+                        SelectionItem {
+                            name: "Yes, purge all sessions and exit".to_string(),
+                            actions: vec![Box::new(|tx| tx.send(AppEvent::PurgeSessions))],
+                            dismiss_on_select: true,
+                            ..Default::default()
+                        },
+                    ],
+                    ..SelectionViewParams::confirmation()
+                });
+                self.request_redraw();
+            }
             SlashCommand::Logout => {
                 self.app_event_tx.send(AppEvent::Logout);
             }
@@ -1371,6 +1403,7 @@ impl ChatWidget {
             | SlashCommand::AutoReview
             | SlashCommand::Memories
             | SlashCommand::Quit
+            | SlashCommand::Purge
             | SlashCommand::Exit
             | SlashCommand::Logout
             | SlashCommand::Mention

@@ -71,6 +71,7 @@ pub enum SlashCommand {
     Apps,
     Plugins,
     Logout,
+    Purge,
     Quit,
     Exit,
     Feedback,
@@ -104,6 +105,7 @@ impl SlashCommand {
             SlashCommand::Resume => "resume a saved chat",
             SlashCommand::Archive => "archive this session",
             SlashCommand::Delete => "permanently delete this session",
+            SlashCommand::Purge => "purge all saved sessions and exit Codex",
             SlashCommand::Clear => "clear the terminal and start a new chat",
             SlashCommand::Fork => "fork the current chat",
             SlashCommand::Handoff => "hand off task-relevant context to a fresh chat",
@@ -237,6 +239,7 @@ impl SlashCommand {
                 | SlashCommand::Agents
                 | SlashCommand::MultiAgents
                 | SlashCommand::Quit
+                | SlashCommand::Purge
                 | SlashCommand::Exit
                 | SlashCommand::Status
                 | SlashCommand::Warnings
@@ -307,6 +310,7 @@ impl SlashCommand {
             | SlashCommand::Feedback
             | SlashCommand::Ide
             | SlashCommand::Quit
+            | SlashCommand::Purge
             | SlashCommand::Exit
             | SlashCommand::Side
             | SlashCommand::Btw => true,
