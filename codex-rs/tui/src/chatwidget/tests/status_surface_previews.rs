@@ -414,7 +414,7 @@ async fn status_surface_preview_omits_unavailable_rate_limit_items() {
             &mut chat,
             &[StatusLineItem::FiveHourLimit, StatusLineItem::WeeklyLimit]
         ),
-        "weekly 91% left"
+        "week: 9%"
     );
     assert_eq!(
         title_preview_line(
@@ -424,8 +424,67 @@ async fn status_surface_preview_omits_unavailable_rate_limit_items() {
                 TerminalTitleItem::WeeklyLimit
             ],
         ),
-        "weekly 91% left"
+        "week: 9%"
     );
+}
+
+#[tokio::test]
+async fn status_surface_weekly_usage_shows_reset_countdown() {
+    let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+    let reset = chrono::Utc::now().timestamp() + 6 * 86_400 + 16 * 3_600 + 30 * 60;
+    chat.on_rate_limit_snapshot(Some(RateLimitSnapshot {
+        limit_id: None,
+        limit_name: None,
+        normal_model_slug: None,
+        primary: Some(RateLimitWindow {
+            used_percent: 40,
+            window_duration_mins: Some(5 * 60),
+            resets_at: None,
+        }),
+        secondary: Some(RateLimitWindow {
+            used_percent: 17,
+            window_duration_mins: Some(7 * 24 * 60),
+            resets_at: Some(reset),
+        }),
+        credits: None,
+        individual_limit: None,
+        spend_control_reached: None,
+        plan_type: None,
+        rate_limit_reached_type: None,
+    }));
+
+    assert_eq!(
+        status_preview_line(
+            &mut chat,
+            &[StatusLineItem::FiveHourLimit, StatusLineItem::WeeklyLimit]
+        ),
+        "5h 60% left · week: 17% (reset: 6d16h)"
+    );
+    assert_eq!(
+        title_preview_line(&mut chat, &[TerminalTitleItem::WeeklyLimit]),
+        "week: 17% (reset: 6d16h)"
+    );
+
+    chat.show_welcome_banner = false;
+    chat.local_settings.tui.status_line = Some(vec!["weekly-limit".to_string()]);
+    chat.refresh_status_line();
+    assert_eq!(
+        status_line_text(&chat),
+        Some("week: 17% (reset: 6d16h)".to_string())
+    );
+    for width in [80, 40, 80] {
+        let height = chat.desired_height(width);
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
+                .expect("create terminal");
+        terminal
+            .draw(|frame| chat.render(frame.area(), frame.buffer_mut()))
+            .expect("draw weekly quota footer");
+        assert!(
+            normalized_backend_snapshot(terminal.backend()).contains("week: 17% (reset: 6d16h)"),
+            "weekly quota should fit at width {width}"
+        );
+    }
 }
 
 #[tokio::test]

@@ -64,7 +64,7 @@ pub(crate) enum TerminalTitleItem {
     ContextUsed,
     /// Remaining usage on the primary rate limit.
     FiveHourLimit,
-    /// Remaining usage on the secondary rate limit.
+    /// Used weekly quota and reset countdown, falling back to the secondary rate limit.
     WeeklyLimit,
     /// Codex application version.
     CodexVersion,
@@ -121,7 +121,7 @@ impl TerminalTitleItem {
                 "Remaining usage on the primary usage limit (omitted when unavailable)"
             }
             TerminalTitleItem::WeeklyLimit => {
-                "Remaining usage on the secondary usage limit (omitted when unavailable)"
+                "Used weekly quota and time until reset (secondary limit fallback)"
             }
             TerminalTitleItem::CodexVersion => "Codex application version",
             TerminalTitleItem::UsedTokens => "Total tokens used in session (omitted when zero)",

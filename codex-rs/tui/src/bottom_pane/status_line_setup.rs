@@ -111,7 +111,7 @@ pub(crate) enum StatusLineItem {
     /// Remaining usage on the primary rate limit.
     FiveHourLimit,
 
-    /// Remaining usage on the secondary rate limit.
+    /// Used weekly quota and reset countdown, falling back to the secondary rate limit.
     WeeklyLimit,
 
     /// Codex application version.
@@ -202,7 +202,7 @@ impl StatusLineItem {
                 "Remaining usage on the primary usage limit (omitted when unavailable)"
             }
             StatusLineItem::WeeklyLimit => {
-                "Remaining usage on the secondary usage limit (omitted when unavailable)"
+                "Used weekly quota and time until reset (secondary limit fallback)"
             }
             StatusLineItem::CodexVersion => "Codex application version",
             StatusLineItem::ContextWindowSize => {
@@ -724,7 +724,7 @@ mod tests {
                 ),
                 (
                     StatusLineItem::WeeklyLimit.preview_item(),
-                    "weekly 82% left".to_string(),
+                    "week: 18% (reset: 6d16h)".to_string(),
                 ),
             ]),
             AppEventSender::new(tx_raw),

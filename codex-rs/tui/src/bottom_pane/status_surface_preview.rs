@@ -285,10 +285,10 @@ fn rate_limit_preview_copy(value: &str) -> Option<RateLimitPreviewCopy> {
             name: "daily-limit",
             description: "Remaining usage on the daily usage limit (omitted when unavailable)",
         })
-    } else if value.starts_with("weekly ") {
+    } else if value.starts_with("week: ") {
         Some(RateLimitPreviewCopy {
             name: "weekly-limit",
-            description: "Remaining usage on the weekly usage limit (omitted when unavailable)",
+            description: "Used weekly quota and time until reset (omitted when unavailable)",
         })
     } else if value.starts_with("monthly ") {
         Some(RateLimitPreviewCopy {
