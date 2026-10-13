@@ -648,6 +648,13 @@ strip = false
 # Balance parallel release code generation against binary size.
 codegen-units = 4
 
+# Fast local builds with release optimization and no debug information.
+[profile.release-local]
+inherits = "release"
+lto = false
+codegen-units = 8
+debug = 0
+
 [profile.profiling]
 inherits = "release"
 debug = "full"
