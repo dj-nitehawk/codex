@@ -230,6 +230,67 @@ async fn slash_recap_requests_generation_for_current_thread() {
 }
 
 #[tokio::test]
+async fn slash_handoff_requires_a_task_and_dispatches_inline_args() {
+    let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(None).await;
+    let thread_id = ThreadId::new();
+    chat.thread_id = Some(thread_id);
+    chat.dispatch_command(SlashCommand::Handoff);
+    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, AppEvent::GenerateHandoff { .. }))
+    );
+    assert!(get_history_text(&events).contains("Usage: /handoff"));
+
+    submit_composer_text(&mut chat, "/handoff finish the parser");
+
+    let event = std::iter::from_fn(|| rx.try_recv().ok())
+        .find(|event| matches!(event, AppEvent::GenerateHandoff { .. }));
+    assert_matches!(event, Some(AppEvent::GenerateHandoff { thread_id: id, task })
+        if id == thread_id && task == "finish the parser");
+    assert!(
+        !std::iter::from_fn(|| op_rx.try_recv().ok()).any(|op| matches!(op, Op::UserTurn { .. }))
+    );
+}
+
+#[tokio::test]
+async fn slash_handoff_rejects_a_running_turn() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+    chat.thread_id = Some(ThreadId::new());
+    handle_turn_started(&mut chat, "turn-1");
+    chat.dispatch_command_with_args(
+        SlashCommand::Handoff,
+        "finish the parser".into(),
+        Vec::new(),
+    );
+    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, AppEvent::GenerateHandoff { .. }))
+    );
+    assert!(get_history_text(&events).contains("disabled while a task is in progress"));
+}
+
+fn get_history_text(events: &[AppEvent]) -> String {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            AppEvent::InsertHistoryCell(cell) => Some(
+                cell.raw_lines()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[tokio::test]
 async fn queued_slash_compact_dispatches_after_active_turn() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
