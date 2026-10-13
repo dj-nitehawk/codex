@@ -3540,6 +3540,16 @@ impl App {
                 self.apply_keymap_clear(context, action).await;
                 self.merge_startup_warnings(tui, &history_cell::StartupWarningsCell::default());
             }
+            AppEvent::GenerateHandoff { thread_id, task } => {
+                self.request_handoff(app_server, thread_id, task);
+            }
+            AppEvent::HandoffStarted { request_id, result } => {
+                self.handle_handoff_started(app_server, request_id, result);
+            }
+            AppEvent::HandoffGenerated { request_id, temporary_thread_id, result } => {
+                self.temporary_structured_requests.remove(&temporary_thread_id);
+                self.handle_handoff_generated(tui, app_server, request_id, result).await;
+            }
             AppEvent::GenerateRecap { thread_id } => {
                 if self.current_displayed_thread_id() == Some(thread_id) {
                     if self.chat_widget.is_user_turn_pending_or_running() {

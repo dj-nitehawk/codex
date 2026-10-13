@@ -1719,6 +1719,21 @@ pub(crate) enum AppEvent {
         action: String,
     },
 
+    /// Generate task-focused context for a new empty peer thread.
+    GenerateHandoff {
+        thread_id: ThreadId,
+        task: String,
+    },
+    HandoffStarted {
+        request_id: Uuid,
+        result: Result<(String, String), String>,
+    },
+    HandoffGenerated {
+        request_id: Uuid,
+        temporary_thread_id: ThreadId,
+        result: Result<String, String>,
+    },
+
     /// Generate a recap for the displayed idle thread at the user's request.
     GenerateRecap {
         thread_id: ThreadId,

@@ -391,6 +391,18 @@ impl App {
         key_event: KeyEvent,
     ) {
         let activation_key = self.routed_key_activation.take();
+        if key_event.code == KeyCode::Esc
+            && key_event.modifiers == KeyModifiers::NONE
+            && key_event.kind == KeyEventKind::Press
+            && self.overlay.is_none()
+            && self.chat_widget.no_modal_or_popup_active()
+            && self.handoff.is_some()
+        {
+            self.cancel_handoff();
+            self.chat_widget
+                .add_info_message("Handoff cancelled.".to_string(), None);
+            return;
+        }
         if self.chat_widget.fork_in_progress {
             return;
         }

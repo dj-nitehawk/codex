@@ -1005,6 +1005,7 @@ See the Codex keymap documentation for supported actions and examples."
             pending_plugin_enabled_writes: HashMap::new(),
             pending_hook_enabled_writes: HashMap::new(),
             recap: recap::RecapState::default(),
+            handoff: None,
             #[cfg(test)]
             _test_codex_home: None,
         };
