@@ -72,6 +72,8 @@ pub(crate) struct RateLimitWindowDisplay {
     pub used_percent: f64,
     /// Human-readable local reset time.
     pub resets_at: Option<String>,
+    /// Reset timestamp retained for relative countdowns.
+    pub resets_at_timestamp: Option<i64>,
     /// Window length in minutes when provided by the server.
     pub window_minutes: Option<i64>,
 }
@@ -92,8 +94,30 @@ impl RateLimitWindowDisplay {
         Self {
             used_percent: f64::from(window.used_percent),
             resets_at,
+            resets_at_timestamp: resets_at_utc.map(|dt| dt.timestamp()),
             window_minutes: window.window_duration_mins,
         }
+    }
+
+    pub(crate) fn weekly_usage_display(&self, now: i64) -> String {
+        let used = self.used_percent.clamp(0.0, 100.0);
+        let usage = format!("week: {used:.0}%");
+        let Some(resets_at) = self.resets_at_timestamp else {
+            return usage;
+        };
+
+        let seconds = resets_at.saturating_sub(now).max(0);
+        let days = seconds / 86_400;
+        let hours = seconds / 3_600 % 24;
+        let minutes = seconds / 60 % 60;
+        let reset = if days > 0 {
+            format!("{days}d{hours}h")
+        } else if hours > 0 {
+            format!("{hours}h{minutes}m")
+        } else {
+            format!("{minutes}m")
+        };
+        format!("{usage} (reset: {reset})")
     }
 }
 
@@ -460,8 +484,69 @@ mod tests {
         RateLimitWindowDisplay {
             used_percent,
             resets_at: Some("soon".to_string()),
+            resets_at_timestamp: None,
             window_minutes: Some(300),
         }
+    }
+
+    #[test]
+    fn weekly_usage_display_formats_reset_countdown() {
+        let now = 1_800_000_000;
+        let mut window = window(17.0);
+        for (seconds, expected) in [
+            (6 * 86_400 + 16 * 3_600, "6d16h"),
+            (86_400, "1d0h"),
+            (23 * 3_600 + 59 * 60, "23h59m"),
+            (3_600, "1h0m"),
+            (59 * 60, "59m"),
+            (59, "0m"),
+            (0, "0m"),
+            (-60, "0m"),
+        ] {
+            window.resets_at_timestamp = Some(now + seconds);
+            assert_eq!(
+                window.weekly_usage_display(now),
+                format!("week: 17% (reset: {expected})")
+            );
+        }
+
+        window.resets_at_timestamp = Some(now + 3_600);
+        assert_eq!(
+            window.weekly_usage_display(now + 60),
+            "week: 17% (reset: 59m)"
+        );
+    }
+
+    #[test]
+    fn weekly_usage_display_without_reset_clamps_and_rounds_usage() {
+        for (used, expected) in [
+            (17.4, "week: 17%"),
+            (17.6, "week: 18%"),
+            (-10.0, "week: 0%"),
+            (110.0, "week: 100%"),
+        ] {
+            assert_eq!(window(used).weekly_usage_display(0), expected);
+        }
+    }
+
+    #[test]
+    fn weekly_usage_display_retains_server_reset_timestamp() {
+        let now = Local::now();
+        let reset = now.timestamp() + 6 * 86_400 + 16 * 3_600;
+        let window = RateLimitWindowDisplay::from_window(
+            &super::RateLimitWindow {
+                used_percent: 17,
+                window_duration_mins: Some(7 * 24 * 60),
+                resets_at: Some(reset),
+            },
+            now,
+            super::ClockFormat::TwentyFourHour,
+        );
+        assert_eq!(window.resets_at_timestamp, Some(reset));
+        assert_eq!(
+            window.weekly_usage_display(now.timestamp()),
+            "week: 17% (reset: 6d16h)"
+        );
     }
 
     #[test]
@@ -522,11 +607,13 @@ mod tests {
             primary: Some(RateLimitWindowDisplay {
                 used_percent: 20.0,
                 resets_at: Some("soon".to_string()),
+                resets_at_timestamp: None,
                 window_minutes: Some(60),
             }),
             secondary: Some(RateLimitWindowDisplay {
                 used_percent: 40.0,
                 resets_at: Some("later".to_string()),
+                resets_at_timestamp: None,
                 window_minutes: Some(2 * 60),
             }),
             credits: None,

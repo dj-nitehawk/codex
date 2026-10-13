@@ -450,6 +450,9 @@ impl ChatWidget {
         label: &str,
     ) -> Option<String> {
         let window = window?;
+        if label == "weekly" {
+            return Some(window.weekly_usage_display(chrono::Utc::now().timestamp()));
+        }
         let remaining = (100.0f64 - window.used_percent).clamp(0.0f64, 100.0f64);
         Some(format!("{label} {remaining:.0}% left"))
     }
