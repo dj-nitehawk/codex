@@ -348,6 +348,9 @@ impl ChatWidget {
                 self.input_queue.user_turn_pending_start = true;
                 self.app_event_tx.compact();
             }
+            SlashCommand::Handoff => {
+                self.add_error_message("Usage: /handoff <task for the new session>".to_string());
+            }
             SlashCommand::Recap => {
                 let Some(thread_id) = self.thread_id else {
                     self.add_error_message(
@@ -811,6 +814,22 @@ impl ChatWidget {
                     destination: crate::app_event::TranscriptExportDestination::File(
                         PathBuf::from(trimmed),
                     ),
+                });
+            }
+            SlashCommand::Handoff => {
+                if self.blocks_direct_input {
+                    self.add_error_message(PARENT_OWNED_INPUT_MESSAGE.to_string());
+                    return;
+                }
+                let Some(thread_id) = self.thread_id else {
+                    self.add_error_message(
+                        "Session is still starting; try /handoff again in a moment.".to_string(),
+                    );
+                    return;
+                };
+                self.app_event_tx.send(AppEvent::GenerateHandoff {
+                    thread_id,
+                    task: trimmed.to_string(),
                 });
             }
             SlashCommand::Cd => self.request_working_directory_change(trimmed),
@@ -1311,6 +1330,7 @@ impl ChatWidget {
             | SlashCommand::Clear
             | SlashCommand::Resume
             | SlashCommand::Fork
+            | SlashCommand::Handoff
             | SlashCommand::Init
             | SlashCommand::Compact
             | SlashCommand::Review

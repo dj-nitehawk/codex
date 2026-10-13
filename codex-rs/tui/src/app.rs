@@ -241,6 +241,7 @@ mod turn_tips;
 pub(crate) use new_session::has_launch_setting;
 mod clipboard;
 mod footer_selection;
+mod handoff;
 mod native_history;
 mod owned_transcript;
 mod pending_interactive_replay;
@@ -681,6 +682,7 @@ pub(crate) struct App {
     // persist an older toggle after a newer one.
     pending_hook_enabled_writes: HashMap<String, Option<bool>>,
     recap: recap::RecapState,
+    handoff: Option<handoff::PendingHandoff>,
     // App fixtures keep their home alive across widget replacement; drop it last.
     #[cfg(test)]
     _test_codex_home: Option<tempfile::TempDir>,

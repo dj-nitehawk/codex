@@ -490,6 +490,7 @@ impl App {
     /// This helper copies every known nickname/role from `AgentNavigationState` into the
     /// replacement widget so that replayed collab items render agent names immediately.
     pub(super) fn replace_chat_widget(&mut self, mut chat_widget: ChatWidget) {
+        self.cancel_handoff();
         chat_widget.fork_in_progress = self.chat_widget.fork_in_progress;
         self.pending_right_click_paste = None;
         self.config_notification_test_pending = None;
@@ -1017,6 +1018,30 @@ impl App {
             &self.cli_kv_overrides,
             &self.harness_overrides,
         );
+        self.start_fresh_session_with_config(
+            tui,
+            app_server,
+            config,
+            local_settings,
+            session_start_source,
+            initial_user_message,
+            new_thread_name,
+        )
+        .await;
+    }
+
+    /// Start a fresh thread with staged settings instead of reloading new-session defaults.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn start_fresh_session_with_config(
+        &mut self,
+        tui: &mut tui::Tui,
+        app_server: &mut AppServerSession,
+        config: Config,
+        local_settings: crate::local_settings::LocalSettings,
+        session_start_source: Option<ThreadStartSource>,
+        initial_user_message: Option<crate::chatwidget::UserMessage>,
+        new_thread_name: Option<String>,
+    ) {
         match app_server
             .start_thread_with_session_start_source(
                 &self.local_settings,
