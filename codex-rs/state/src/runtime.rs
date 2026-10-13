@@ -49,6 +49,7 @@ mod logs_maintenance;
 mod memories;
 mod memory_versions;
 mod projects;
+mod purge;
 mod queued_items;
 pub(crate) mod reclamation;
 pub(crate) mod recovery;
