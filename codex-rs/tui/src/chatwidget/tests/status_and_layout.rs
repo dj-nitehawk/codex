@@ -1011,7 +1011,7 @@ async fn status_line_legacy_limit_items_prefer_matching_windows() {
     );
     assert_eq!(
         chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::WeeklyLimit),
-        Some("weekly 6% left".to_string())
+        Some("week: 94%".to_string())
     );
 }
 
@@ -1046,7 +1046,7 @@ async fn status_line_shows_secondary_non_weekly_when_primary_is_weekly() {
     );
     assert_eq!(
         chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::WeeklyLimit),
-        Some("weekly 6% left".to_string())
+        Some("week: 94%".to_string())
     );
 }
 
@@ -1077,7 +1077,7 @@ async fn status_line_five_hour_item_omits_weekly_only_limit() {
     );
     assert_eq!(
         chat.status_line_value_for_item(crate::bottom_pane::StatusLineItem::WeeklyLimit),
-        Some("weekly 91% left".to_string())
+        Some("week: 9%".to_string())
     );
 }
 
