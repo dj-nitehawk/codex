@@ -349,6 +349,12 @@ impl ChatWidget {
         self.bottom_pane.composer_text_with_pending()
     }
 
+    pub(crate) fn has_unsent_composer_input(&self) -> bool {
+        !self.bottom_pane.composer_is_empty()
+            || !self.composer_text_with_pending().is_empty()
+            || !self.bottom_pane.composer_pending_pastes().is_empty()
+    }
+
     pub(crate) fn apply_external_edit(&mut self, text: String) {
         self.bottom_pane.apply_external_edit(text);
         self.refresh_startup_recovery();

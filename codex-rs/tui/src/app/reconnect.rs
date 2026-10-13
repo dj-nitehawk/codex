@@ -245,6 +245,7 @@ impl App {
             self.cancel_pending_key_chord();
             self.overlay = None;
             self.commit_animation = None;
+            self.cancel_handoff();
             self.clear_recap_request(crate::app_event::RecapTrigger::Manual);
             if let Some(task) = self.agents_overview.refresh_task.take() {
                 task.abort();
@@ -424,6 +425,7 @@ impl App {
         self.pending_primary_events.clear();
         self.pending_plugin_enabled_writes.clear();
         self.pending_hook_enabled_writes.clear();
+        self.cancel_handoff();
         self.temporary_structured_requests.clear();
         for (_, cancellation) in self.pending_thread_titles.drain() {
             cancellation.cancel();
