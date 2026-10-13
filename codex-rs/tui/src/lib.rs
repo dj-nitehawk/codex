@@ -206,6 +206,7 @@ mod screen_reader;
 mod service_tier_resolution;
 mod session_archive_commands;
 mod session_log;
+mod session_purge;
 mod session_queue_commands;
 mod session_resume;
 mod session_start;

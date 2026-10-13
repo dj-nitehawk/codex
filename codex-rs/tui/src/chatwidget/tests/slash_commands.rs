@@ -3162,6 +3162,49 @@ async fn slash_delete_confirmation_requests_current_thread_delete() {
 }
 
 #[tokio::test]
+async fn slash_purge_requires_confirmation_and_cancellation_keeps_sessions() {
+    for width in [40, 80, 120] {
+        let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+        chat.dispatch_command(SlashCommand::Purge);
+        assert!(chat.bottom_pane.has_active_view());
+        assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+        let popup = render_bottom_popup(&chat, width);
+        assert!(popup.contains("Purge ALL saved sessions"));
+        chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+        assert!(!chat.bottom_pane.has_active_view());
+        assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+        chat.dispatch_command(SlashCommand::Purge);
+        chat.handle_key_event(KeyEvent::from(KeyCode::Esc));
+        assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
+        chat.dispatch_command(SlashCommand::Purge);
+        chat.handle_key_event(KeyEvent::from(KeyCode::Down));
+        chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+        assert_matches!(rx.try_recv(), Ok(AppEvent::PurgeSessions));
+    }
+}
+
+#[tokio::test]
+async fn slash_purge_rejects_remote_and_daemon_connections() {
+    let endpoint = crate::resolve_remote_addr("ws://127.0.0.1:4500").unwrap();
+    for target in [
+        crate::AppServerTarget::LocalDaemon {
+            allow_embedded_fallback: true,
+            endpoint: endpoint.clone(),
+        },
+        crate::AppServerTarget::Remote { endpoint },
+    ] {
+        let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+        chat.remote_connection =
+            crate::status::remote_connection::remote_connection_status_value(&target, None);
+        chat.dispatch_command(SlashCommand::Purge);
+        assert!(!chat.bottom_pane.has_active_view());
+        while let Ok(event) = rx.try_recv() {
+            assert!(!matches!(event, AppEvent::PurgeSessions));
+        }
+    }
+}
+
+#[tokio::test]
 async fn slash_resume_with_arg_requests_named_session_while_mcp_startup_is_running() {
     let (mut chat, mut rx, mut op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.bottom_pane.set_task_running(/*running*/ true);

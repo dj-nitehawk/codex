@@ -285,7 +285,7 @@ impl InProcessClientSender {
 pub struct InProcessClientHandle {
     client: InProcessClientSender,
     event_rx: mpsc::Receiver<InProcessServerEvent>,
-    runtime_handle: tokio::task::JoinHandle<()>,
+    runtime_handle: tokio::task::JoinHandle<IoResult<()>>,
     #[cfg(test)]
     _test_codex_home: Option<tempfile::TempDir>,
 }
@@ -341,8 +341,8 @@ impl InProcessClientHandle {
 
     /// Requests runtime shutdown and waits for worker termination.
     ///
-    /// Shutdown is bounded by internal timeouts and may abort background tasks
-    /// if graceful drain does not complete in time.
+    /// Reports incomplete cleanup, including when shutdown admission closes before
+    /// the explicit request can be queued.
     pub async fn shutdown(self) -> IoResult<()> {
         // Shutdown owns the only event receiver, so nobody can drain it anymore.
         // Unblock notification delivery before waiting for space in the client queue.
@@ -360,11 +360,19 @@ impl InProcessClientHandle {
             let _ = timeout(SHUTDOWN_ACK_TIMEOUT, done_rx).await;
         }
 
-        if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut runtime_handle).await {
-            runtime_handle.abort();
-            let _ = runtime_handle.await;
+        // Dropping the event receiver can start shutdown before the request is admitted.
+        // The runtime's result, not receipt of an acknowledgement, proves cleanup finished.
+        match timeout(SHUTDOWN_TIMEOUT, &mut runtime_handle).await {
+            Ok(result) => result.map_err(IoError::other)?,
+            Err(_) => {
+                runtime_handle.abort();
+                let _ = runtime_handle.await;
+                Err(IoError::new(
+                    ErrorKind::TimedOut,
+                    "app-server runtime shutdown timed out",
+                ))
+            }
         }
-        Ok(())
     }
 
     pub fn sender(&self) -> InProcessClientSender {
@@ -604,7 +612,7 @@ async fn start_uninitialized(mut args: InProcessStartArgs) -> IoResult<InProcess
                 .await;
             processor.clear_all_thread_listeners().await;
             processor.drain_background_tasks().await;
-            processor.shutdown_threads().await;
+            processor.shutdown_threads().await
         });
         let mut pending_request_responses =
             HashMap::<RequestId, oneshot::Sender<PendingClientRequestResponse>>::new();
@@ -798,10 +806,20 @@ async fn start_uninitialized(mut args: InProcessStartArgs) -> IoResult<InProcess
             )));
         }
 
-        if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut processor_handle).await {
-            processor_handle.abort();
-            let _ = processor_handle.await;
-        }
+        let shutdown_result = match timeout(SHUTDOWN_TIMEOUT, &mut processor_handle).await {
+            Ok(Ok(true)) => Ok(()),
+            Ok(_) => Err(IoError::other(
+                "app-server session shutdown did not complete",
+            )),
+            Err(_) => {
+                processor_handle.abort();
+                let _ = processor_handle.await;
+                Err(IoError::new(
+                    ErrorKind::TimedOut,
+                    "app-server session shutdown timed out",
+                ))
+            }
+        };
         let _ = outbound_shutdown_tx.send(());
         if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut outbound_handle).await {
             outbound_handle.abort();
@@ -813,6 +831,7 @@ async fn start_uninitialized(mut args: InProcessStartArgs) -> IoResult<InProcess
         if let Some(done_tx) = shutdown_ack {
             let _ = done_tx.send(());
         }
+        shutdown_result
     });
 
     Ok(InProcessClientHandle {
@@ -1023,6 +1042,7 @@ mod tests {
             tokio::time::sleep(SHUTDOWN_TIMEOUT + SHUTDOWN_TIMEOUT + Duration::from_secs(24)).await;
             runtime_completed.store(true, Ordering::Release);
             let _ = done_tx.send(());
+            Ok(())
         });
         let client = InProcessClientHandle {
             client: InProcessClientSender { client_tx },
@@ -1036,6 +1056,29 @@ mod tests {
             .await
             .expect("in-process runtime should shutdown cleanly");
         assert!(completed.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn in_process_shutdown_checks_cleanup_after_admission_closes() {
+        for incomplete in [false, true] {
+            let (client_tx, client_rx) = mpsc::channel(/*buffer*/ 1);
+            drop(client_rx);
+            let (_event_tx, event_rx) = mpsc::channel(/*buffer*/ 1);
+            let runtime_handle = tokio::spawn(async move {
+                if incomplete {
+                    Err(IoError::other("session cleanup incomplete"))
+                } else {
+                    Ok(())
+                }
+            });
+            let client = InProcessClientHandle {
+                client: InProcessClientSender { client_tx },
+                event_rx,
+                runtime_handle,
+                _test_codex_home: None,
+            };
+            assert_eq!(client.shutdown().await.is_err(), incomplete);
+        }
     }
 
     #[test]
@@ -1189,8 +1232,7 @@ mod tests {
         }
         assert_eq!(sender.client_tx.capacity(), 0);
 
-        // Only advance time after the real requests have filled both queues.
-        tokio::time::pause();
+        // Keep real time running while shutdown drains filesystem and database work.
         timeout(
             SHUTDOWN_ACK_TIMEOUT + SHUTDOWN_TIMEOUT + Duration::from_secs(1),
             client.shutdown(),

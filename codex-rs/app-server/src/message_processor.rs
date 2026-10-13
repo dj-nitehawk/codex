@@ -876,8 +876,8 @@ impl MessageProcessor {
         self.thread_processor.clear_all_thread_listeners().await;
     }
 
-    pub(crate) async fn shutdown_threads(&self) {
-        self.thread_processor.shutdown_threads().await;
+    pub(crate) async fn shutdown_threads(&self) -> bool {
+        self.thread_processor.shutdown_threads().await
     }
 
     pub(crate) async fn connection_closed(

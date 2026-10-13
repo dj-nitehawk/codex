@@ -1003,6 +1003,18 @@ impl App {
                 }
                 return Ok(self.handle_exit_mode(app_server, mode).await);
             }
+            AppEvent::PurgeSessions => {
+                if !matches!(self.app_server_target, AppServerTarget::Embedded) {
+                    self.chat_widget.add_error_message(
+                        "/purge requires a local embedded server. Restart Codex with --no-daemon."
+                            .to_string(),
+                    );
+                    return Ok(AppRunControl::Continue);
+                }
+                self.show_shutdown_feedback(tui)?;
+                self.handle_exit_mode(app_server, ExitMode::ShutdownFirst).await;
+                return Ok(AppRunControl::Exit(ExitReason::Purged));
+            }
             AppEvent::RunningTaskExit { action, thread_id } => match action {
                 RunningTaskExitAction::RunInBackground => {
                     return Ok(self.handle_exit_mode(app_server, ExitMode::Immediate).await);

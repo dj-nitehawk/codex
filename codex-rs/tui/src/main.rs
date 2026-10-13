@@ -47,6 +47,7 @@ fn main() -> anyhow::Result<()> {
             | ExitReason::Archived(_)
             | ExitReason::TurnInterrupted
             | ExitReason::ThreadRemoved => false,
+            ExitReason::Purged => false,
         };
 
         let color_enabled = supports_color::on(Stream::Stdout).is_some();

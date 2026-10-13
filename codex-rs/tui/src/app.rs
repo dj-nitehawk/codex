@@ -495,6 +495,7 @@ pub(crate) enum AppRunControl {
 #[derive(Debug, Clone)]
 pub enum ExitReason {
     UserRequested,
+    Purged,
     Archived(ThreadId),
     TurnInterrupted,
     /// The current thread was deleted, rather than disconnected.
