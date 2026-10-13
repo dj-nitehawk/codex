@@ -208,7 +208,7 @@ enum InProcessClientMessage {
         error: JSONRPCErrorError,
     },
     Shutdown {
-        done_tx: oneshot::Sender<()>,
+        done_tx: oneshot::Sender<IoResult<()>>,
     },
 }
 
@@ -347,21 +347,36 @@ impl InProcessClientHandle {
         let mut runtime_handle = self.runtime_handle;
         let (done_tx, done_rx) = oneshot::channel();
 
-        if self
+        let result = if self
             .client
             .client_tx
             .send(InProcessClientMessage::Shutdown { done_tx })
             .await
             .is_ok()
         {
-            let _ = timeout(SHUTDOWN_ACK_TIMEOUT, done_rx).await;
-        }
+            match timeout(SHUTDOWN_ACK_TIMEOUT, done_rx).await {
+                Ok(Ok(result)) => result,
+                Ok(Err(_)) => Err(IoError::other(
+                    "app-server shutdown acknowledgement was lost",
+                )),
+                Err(_) => Err(IoError::new(
+                    ErrorKind::TimedOut,
+                    "app-server shutdown timed out",
+                )),
+            }
+        } else {
+            Err(IoError::other("app-server shutdown channel is closed"))
+        };
 
         if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut runtime_handle).await {
             runtime_handle.abort();
             let _ = runtime_handle.await;
+            return Err(IoError::new(
+                ErrorKind::TimedOut,
+                "app-server runtime shutdown timed out",
+            ));
         }
-        Ok(())
+        result
     }
 
     pub fn sender(&self) -> InProcessClientSender {
@@ -596,7 +611,7 @@ async fn start_uninitialized(mut args: InProcessStartArgs) -> IoResult<InProcess
                 .await;
             processor.clear_all_thread_listeners().await;
             processor.drain_background_tasks().await;
-            processor.shutdown_threads().await;
+            processor.shutdown_threads().await
         });
         let mut pending_request_responses =
             HashMap::<RequestId, oneshot::Sender<PendingClientRequestResponse>>::new();
@@ -790,10 +805,20 @@ async fn start_uninitialized(mut args: InProcessStartArgs) -> IoResult<InProcess
             )));
         }
 
-        if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut processor_handle).await {
-            processor_handle.abort();
-            let _ = processor_handle.await;
-        }
+        let shutdown_result = match timeout(SHUTDOWN_TIMEOUT, &mut processor_handle).await {
+            Ok(Ok(true)) => Ok(()),
+            Ok(_) => Err(IoError::other(
+                "app-server session shutdown did not complete",
+            )),
+            Err(_) => {
+                processor_handle.abort();
+                let _ = processor_handle.await;
+                Err(IoError::new(
+                    ErrorKind::TimedOut,
+                    "app-server session shutdown timed out",
+                ))
+            }
+        };
         let _ = outbound_shutdown_tx.send(());
         if let Err(_elapsed) = timeout(SHUTDOWN_TIMEOUT, &mut outbound_handle).await {
             outbound_handle.abort();
@@ -803,7 +828,7 @@ async fn start_uninitialized(mut args: InProcessStartArgs) -> IoResult<InProcess
         analytics_events_flush_client.flush().await;
 
         if let Some(done_tx) = shutdown_ack {
-            let _ = done_tx.send(());
+            let _ = done_tx.send(shutdown_result);
         }
     });
 
@@ -1010,7 +1035,7 @@ mod tests {
             };
             tokio::time::sleep(SHUTDOWN_TIMEOUT + SHUTDOWN_TIMEOUT + Duration::from_secs(24)).await;
             runtime_completed.store(true, Ordering::Release);
-            let _ = done_tx.send(());
+            let _ = done_tx.send(Ok(()));
         });
         let client = InProcessClientHandle {
             client: InProcessClientSender { client_tx },

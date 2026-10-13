@@ -1294,17 +1294,20 @@ impl ThreadRequestProcessor {
         self.thread_state_manager.clear_all_listeners().await;
     }
 
-    pub(crate) async fn shutdown_threads(&self) {
+    pub(crate) async fn shutdown_threads(&self) -> bool {
         let report = self
             .thread_manager
             .shutdown_all_threads_bounded(Duration::from_secs(10))
             .await;
+        let complete = report.submit_failed.is_empty() && report.timed_out.is_empty();
         for thread_id in report.submit_failed {
             warn!("failed to submit Shutdown to thread {thread_id}");
         }
         for thread_id in report.timed_out {
             warn!("timed out waiting for thread {thread_id} to shut down");
         }
+        // A turn may have spawned another thread while the initial shutdown snapshot drained.
+        complete && self.thread_manager.list_thread_ids().await.is_empty()
     }
 
     async fn request_trace_context(

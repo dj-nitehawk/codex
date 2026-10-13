@@ -886,6 +886,9 @@ pub(super) async fn run_main_inner(
     }
 
     // Keep the large app future off the enclosing CLI startup stack during transitions.
+    let purge_paths = session_purge::PurgePaths::from_config(&config);
+    let purge_state = state_db.clone();
+    let purge_log = log_db.clone();
     let app_result = Box::pin(run_ratatui_app(
         cli,
         arg0_paths,
@@ -947,5 +950,19 @@ pub(super) async fn run_main_inner(
         warn!(error = %err, "failed to finish interactive telemetry shutdown");
     }
 
+    if let Ok(exit) = &app_result
+        && matches!(exit.exit_reason, ExitReason::Purged)
+    {
+        if let Some(log) = purge_log {
+            log.flush().await;
+        }
+        drop(_tui_file_log_guard);
+        session_log::purge_recording()?;
+        session_purge::purge_sessions(&purge_paths, purge_state.as_deref())
+            .await
+            .map_err(|error| std::io::Error::other(format!(
+                "Purge failed and may be incomplete: {error}. Close other Codex instances and retry.",
+            )))?;
+    }
     app_result
 }

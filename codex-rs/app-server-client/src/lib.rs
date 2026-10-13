@@ -576,8 +576,7 @@ impl InProcessAppServerClient {
 
     /// Shuts down worker and in-process runtime with bounded wait.
     ///
-    /// If graceful shutdown exceeds timeout, the worker task is aborted to
-    /// avoid leaking background tasks in embedding callers.
+    /// Reports incomplete shutdown so callers can avoid destructive cleanup while writers remain.
     pub async fn shutdown(self) -> IoResult<()> {
         let Self {
             command_tx,
@@ -585,28 +584,40 @@ impl InProcessAppServerClient {
             worker_handle,
         } = self;
         let mut worker_handle = worker_handle;
-        // Stop forwarding caller-facing events before asking the worker to shut down.
         drop(event_rx);
         let (response_tx, response_rx) = oneshot::channel();
-        if command_tx
+        let result = if command_tx
             .send(ClientCommand::Shutdown { response_tx })
             .await
             .is_ok()
-            && let Ok(command_result) = timeout(IN_PROCESS_SHUTDOWN_TIMEOUT, response_rx).await
         {
-            command_result.map_err(|_| {
-                IoError::new(
+            match timeout(IN_PROCESS_SHUTDOWN_TIMEOUT, response_rx).await {
+                Ok(Ok(result)) => result,
+                Ok(Err(_)) => Err(IoError::new(
                     ErrorKind::BrokenPipe,
                     "in-process app-server shutdown channel is closed",
-                )
-            })??;
-        }
+                )),
+                Err(_) => Err(IoError::new(
+                    ErrorKind::TimedOut,
+                    "in-process app-server shutdown timed out",
+                )),
+            }
+        } else {
+            Err(IoError::new(
+                ErrorKind::BrokenPipe,
+                "in-process app-server worker is unavailable",
+            ))
+        };
 
         if let Err(_elapsed) = timeout(IN_PROCESS_SHUTDOWN_TIMEOUT, &mut worker_handle).await {
             worker_handle.abort();
             let _ = worker_handle.await;
+            return Err(IoError::new(
+                ErrorKind::TimedOut,
+                "in-process app-server worker shutdown timed out",
+            ));
         }
-        Ok(())
+        result
     }
 }
 
@@ -2233,5 +2244,47 @@ mod tests {
 
         client.shutdown().await.expect("shutdown should complete");
         assert!(completed.load(Ordering::Acquire));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_reports_incomplete_drain() {
+        for lose_ack in [false, true] {
+            let (command_tx, mut command_rx) = mpsc::channel(1);
+            let (_event_tx, event_rx) = mpsc::unbounded_channel();
+            let worker_handle = tokio::spawn(async move {
+                let response_tx = match command_rx.recv().await {
+                    Some(ClientCommand::Shutdown { response_tx }) => response_tx,
+                    _ => panic!("expected shutdown command"),
+                };
+                if !lose_ack {
+                    let _ = response_tx.send(Err(IoError::other("session shutdown incomplete")));
+                }
+            });
+            let client = InProcessAppServerClient {
+                command_tx,
+                event_rx,
+                worker_handle,
+            };
+            assert!(client.shutdown().await.is_err());
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_reports_timeout_instead_of_success() {
+        let (command_tx, mut command_rx) = mpsc::channel(1);
+        let (_event_tx, event_rx) = mpsc::unbounded_channel();
+        let worker_handle = tokio::spawn(async move {
+            let _command = command_rx.recv().await;
+            std::future::pending::<()>().await;
+        });
+        let client = InProcessAppServerClient {
+            command_tx,
+            event_rx,
+            worker_handle,
+        };
+        assert_eq!(
+            client.shutdown().await.unwrap_err().kind(),
+            ErrorKind::TimedOut
+        );
     }
 }

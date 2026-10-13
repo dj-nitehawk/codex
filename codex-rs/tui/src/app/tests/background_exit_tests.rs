@@ -262,6 +262,34 @@ async fn embedded_exit_keeps_the_session_summary() {
     ");
 }
 
+#[tokio::test]
+async fn purge_exit_has_no_resume_or_disconnect_hints() {
+    let (mut app, _, _) = make_test_app_with_channels().await;
+    prepare_local_daemon_thread(&mut app).unwrap();
+    let info = app.exit_info(ExitReason::Purged);
+    assert!(info.thread_id.is_none());
+    assert!(info.resume_hint.is_none());
+    assert!(info.disconnect_info.is_none());
+    assert_eq!(
+        info.format_exit_messages(false),
+        vec!["All local saved sessions purged."]
+    );
+}
+
+#[tokio::test]
+async fn purge_event_rejects_nonembedded_servers() -> Result<()> {
+    let (mut app, mut rx, mut op_rx) = make_test_app_with_channels().await;
+    prepare_local_daemon_thread(&mut app)?;
+    let (mut server, mut tui) = prepare_background_exit_test(&app, &mut rx, &mut op_rx).await?;
+    assert_matches!(
+        app.handle_event(&mut tui, &mut server, AppEvent::PurgeSessions)
+            .await?,
+        AppRunControl::Continue
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
 fn prepare_local_daemon_thread(app: &mut App) -> Result<ThreadId> {
     app.app_server_target = AppServerTarget::LocalDaemon {
         allow_embedded_fallback: true,

@@ -767,6 +767,7 @@ fn handle_app_exit(
         | ExitReason::Archived(_)
         | ExitReason::TurnInterrupted
         | ExitReason::ThreadRemoved => false,
+        ExitReason::Purged => false,
     };
 
     let update_action = exit_info.update_action;

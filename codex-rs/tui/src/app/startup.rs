@@ -1469,6 +1469,12 @@ See the Codex keymap documentation for supported actions and examples."
             }
         };
         if let Err(err) = app_server.shutdown().await {
+            if matches!(exit_reason_result, Ok(ExitReason::Purged)) {
+                return Err(std::io::Error::other(format!(
+                    "Purge cancelled because the app server could not shut down: {err}",
+                ))
+                .into());
+            }
             tracing::warn!(error = %err, "failed to shut down embedded app server");
         }
         let clear_pet_result = tui.clear_ambient_pet_image();
