@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "adapters": {
+    "gdb": {
+      "command": "/usr/bin/gdb",
+      "args": [
+        "--quiet",
+        "--nx",
+        "--interpreter=dap"
+      ],
+      "type": "gdb",
+      "extensions": [
+        ".rs"
+      ],
+      "transport": "stdio",
+      "launch": {
+        "program": "${workspaceFolder}/codex-rs/target/debug/codex",
+        "cwd": "${workspaceFolder}/codex-rs",
+        "args": [
+          "--help"
+        ]
+      }
+    },
+    "gdb-test": {
+      "command": "/usr/bin/gdb",
+      "args": [
+        "--quiet",
+        "--nx",
+        "--interpreter=dap"
+      ],
+      "type": "gdb",
+      "extensions": [
+        ".rs"
+      ],
+      "transport": "stdio",
+      "launch": {
+        "program": "${workspaceFolder}/codex-rs/target/debug/debug-test",
+        "cwd": "${workspaceFolder}/codex-rs",
+        "args": [
+          "--test-threads=1"
+        ]
+      }
+    }
+  }
+}
