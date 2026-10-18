@@ -914,23 +914,18 @@ impl ConfigToml {
         }
     }
 
-    /// Resolves the cwd to an existing project, or returns None if ConfigToml
-    /// does not contain a project corresponding to cwd or the resolved git repo
-    /// root for cwd.
+    /// Resolve exact cwd/repository settings before inheriting from the nearest
+    /// configured ancestor of the canonical cwd.
     pub fn get_active_project(
         &self,
         resolved_cwd: &Path,
         repo_root: Option<&Path>,
     ) -> Option<ProjectConfig> {
         self.projects.as_ref()?;
-        // Only canonicalize the repository root when neither cwd key matches.
-        std::iter::once(resolved_cwd)
-            .chain(repo_root)
-            .find_map(|path| {
-                self.get_active_project_for_lookup(&crate::ProjectTrustLookup::from_native_path(
-                    path,
-                ))
-            })
+        self.get_active_project_for_lookup(&crate::ProjectTrustLookup::from_native_paths(
+            resolved_cwd,
+            repo_root,
+        ))
     }
 }
 
