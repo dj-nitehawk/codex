@@ -1134,6 +1134,19 @@ impl ProjectTrustContext {
             return decision;
         }
 
+        if let Some(trust_key) = dir_keys.first().and_then(|path| {
+            crate::project_trust::ancestor_project_key(
+                path,
+                codex_utils_path_uri::PathConvention::native(),
+                self.projects_trust.keys(),
+            )
+        }) {
+            return ProjectTrustDecision {
+                trust_level: self.projects_trust.get(trust_key).copied(),
+                trust_key: trust_key.clone(),
+            };
+        }
+
         ProjectTrustDecision {
             trust_level: None,
             trust_key: self
