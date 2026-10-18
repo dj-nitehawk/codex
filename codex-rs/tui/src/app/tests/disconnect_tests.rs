@@ -94,8 +94,15 @@ async fn lost_mutation_reply_preserves_work_without_resubmitting() -> Result<()>
     app.chat_widget
         .set_queue_autosend_suppressed(/*suppressed*/ false);
     assert!(!app.chat_widget.maybe_send_next_queued_input());
-    app.handle_event(&mut tui, &mut session, AppEvent::NewSession { name: None })
-        .await?;
+    app.handle_event(
+        &mut tui,
+        &mut session,
+        AppEvent::NewSession {
+            initial_prompt: None,
+            name: None,
+        },
+    )
+    .await?;
     assert_eq!(app.current_displayed_thread_id(), Some(id));
     while let Ok(event) = events.try_recv() {
         app.handle_event(&mut tui, &mut session, event).await?;

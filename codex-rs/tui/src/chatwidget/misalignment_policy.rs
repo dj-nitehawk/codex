@@ -128,7 +128,12 @@ impl ChatWidget {
         let mut items = vec![
             SelectionItem {
                 name: "New chat".to_string(),
-                actions: vec![Box::new(|tx| tx.send(AppEvent::NewSession { name: None }))],
+                actions: vec![Box::new(|tx| {
+                    tx.send(AppEvent::NewSession {
+                        initial_prompt: None,
+                        name: None,
+                    })
+                })],
                 dismiss_on_select: true,
                 ..Default::default()
             },

@@ -434,7 +434,10 @@ impl App {
                     return;
                 }
                 KeyCode::Char('n') => {
-                    self.app_event_tx.send(AppEvent::NewSession { name: None });
+                    self.app_event_tx.send(AppEvent::NewSession {
+                        name: None,
+                        initial_prompt: None,
+                    });
                     return;
                 }
                 KeyCode::Esc => {

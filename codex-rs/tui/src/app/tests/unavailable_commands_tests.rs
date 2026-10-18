@@ -60,8 +60,13 @@ async fn unavailable_thread_routes_local_and_recovery_commands() -> Result<()> {
             );
             dispatched |= matches!(
                 (command, &event),
-                ("/new", AppEvent::NewSession { name: None })
-                    | ("/resume", AppEvent::OpenResumePicker)
+                (
+                    "/new",
+                    AppEvent::NewSession {
+                        initial_prompt: None,
+                        name: None
+                    }
+                ) | ("/resume", AppEvent::OpenResumePicker)
                     | ("/agents", AppEvent::OpenAgentsOverview)
                     | ("/subagents", AppEvent::OpenAgentPicker)
                     | ("/raw on", AppEvent::RawOutputModeChanged { enabled: true })

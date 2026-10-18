@@ -22,6 +22,7 @@ pub(super) struct ManagedWorktreeAttach {
     keymap: RuntimeKeymap,
     cwd: AbsolutePathBuf,
     name_error: Option<String>,
+    initial_user_message: Option<crate::chatwidget::UserMessage>,
     selected_profile: Option<PermissionProfileSelection>,
 }
 
@@ -103,6 +104,7 @@ impl App {
             config,
             mode,
             name,
+            initial_prompt,
             ..
         } = transition;
         let checkout_root = checkout.root.clone();
@@ -116,7 +118,9 @@ impl App {
             DestinationConfig::Prepared(config),
         )
         .await;
-        if self.pending_managed_worktree_attach.is_none() {
+        if let Some(attach) = self.pending_managed_worktree_attach.as_mut() {
+            attach.initial_user_message = initial_prompt.map(Into::into);
+        } else {
             return Err(color_eyre::eyre::eyre!(
                 "Could not start a session in the managed worktree. A checkout was retained at {}; remove it with `git worktree remove <checkout-path>` from the source repository if it is no longer needed.",
                 checkout_root.display()
@@ -555,6 +559,7 @@ impl App {
             keymap,
             cwd,
             name_error,
+            initial_user_message: None,
             selected_profile,
         };
         if managed_worktree.is_some() {
@@ -580,6 +585,7 @@ impl App {
             keymap,
             cwd,
             name_error,
+            initial_user_message,
             selected_profile,
         } = attach;
         self.local_settings = local_settings;
@@ -593,7 +599,10 @@ impl App {
             tracing::warn!(%error, "failed to clear ambient pet image");
         }
         let attach_widget = App::replace_chat_widget_with_app_server_thread;
-        let (lineage, message) = (ThreadAttachPresentation::SessionLineage, None);
+        let (lineage, message) = (
+            ThreadAttachPresentation::SessionLineage,
+            initial_user_message,
+        );
         if let Err(error) = attach_widget(self, tui, started, lineage, message).await {
             return self.working_directory_error(format!("Could not restore session: {error}"));
         }

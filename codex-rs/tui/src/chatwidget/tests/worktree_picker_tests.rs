@@ -6,6 +6,90 @@ use crate::worktree_browser::Owner;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
+async fn slash_new_prompt_survives_checkout_choices_and_cancellation() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+    let checkout = tempdir().unwrap();
+    std::fs::create_dir(checkout.path().join(".git")).unwrap();
+    std::fs::write(checkout.path().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    chat.config.cwd = AbsolutePathBuf::from_absolute_path(checkout.path()).unwrap();
+    let prompt = "Fix login\nKeep ~ literal and ~/paths";
+    for (prefix, expected_name) in [("/new Login task ~", Some("Login task")), ("~", None)] {
+        for choice in [None, Some('1'), Some('2')] {
+            chat.set_local_worktree_operations(choice.is_some());
+            chat.bottom_pane.set_composer_text(
+                format!("{prefix} {prompt}"),
+                Vec::new(),
+                Vec::new(),
+            );
+            chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+            assert_matches!(rx.try_recv(), Ok(AppEvent::FollowTranscript));
+            if let Some(choice) = choice {
+                for width in [24, 80, 160] {
+                    assert!(render_bottom_popup(&chat, width).contains("worktree"));
+                }
+                chat.handle_key_event(KeyEvent::new(KeyCode::Char(choice), KeyModifiers::NONE));
+            }
+            match rx.try_recv().unwrap() {
+                AppEvent::NewSession {
+                    name,
+                    initial_prompt,
+                } if choice != Some('2') => {
+                    assert_eq!(name.as_deref(), expected_name);
+                    assert_eq!(initial_prompt.as_deref(), Some(prompt));
+                }
+                AppEvent::StartManagedWorktree {
+                    mode,
+                    name,
+                    initial_prompt,
+                } if choice == Some('2') => {
+                    assert_eq!(mode, crate::app_event::ManagedWorktreeMode::New);
+                    assert_eq!(name.as_deref(), expected_name);
+                    assert_eq!(initial_prompt.as_deref(), Some(prompt));
+                }
+                event => panic!("unexpected event: {event:?}"),
+            }
+            assert!(rx.try_recv().is_err());
+        }
+    }
+    chat.bottom_pane
+        .set_composer_text("~ Cancel me".into(), Vec::new(), Vec::new());
+    chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_matches!(rx.try_recv(), Ok(AppEvent::FollowTranscript));
+    chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(rx.try_recv().is_err());
+    chat.set_local_worktree_operations(false);
+    chat.dispatch_command(SlashCommand::New);
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::NewSession {
+            name: None,
+            initial_prompt: None
+        })
+    );
+}
+
+#[tokio::test]
+async fn slash_new_prompt_rejects_empty_prompt_without_starting_session() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+    for input in ["/new name ~", "~", "~   "] {
+        chat.bottom_pane
+            .set_composer_text(input.into(), Vec::new(), Vec::new());
+        chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        let events: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert!(!events.iter().any(|event| matches!(
+            event,
+            AppEvent::NewSession { .. } | AppEvent::StartManagedWorktree { .. }
+        )));
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, AppEvent::InsertHistoryCell(cell)
+        if lines_to_single_string(&cell.display_lines(80)).contains("Usage: /new")))
+        );
+    }
+}
+
+#[tokio::test]
 async fn slash_new_and_fork_offer_checkout_choices_inside_local_git_repository() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.set_local_worktree_operations(/*enabled*/ false);
@@ -21,7 +105,13 @@ async fn slash_new_and_fork_offer_checkout_choices_inside_local_git_repository()
         Ok(AppEvent::ForkCurrentSession { name: None })
     );
     chat.dispatch_command(SlashCommand::New);
-    assert_matches!(rx.try_recv(), Ok(AppEvent::NewSession { name: None }));
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::NewSession {
+            initial_prompt: None,
+            name: None
+        })
+    );
 
     chat.set_local_worktree_operations(/*enabled*/ true);
     chat.dispatch_command(SlashCommand::Fork);
@@ -41,19 +131,25 @@ async fn slash_new_and_fork_offer_checkout_choices_inside_local_git_repository()
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_matches!(rx.try_recv(), Ok(AppEvent::FollowTranscript));
     chat.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
-    assert_matches!(rx.try_recv(), Ok(AppEvent::NewSession { name: Some(name) }) if name == "named");
+    assert_matches!(rx.try_recv(), Ok(AppEvent::NewSession { initial_prompt: None,  name: Some(name) }) if name == "named");
     chat.bottom_pane
         .set_composer_text("/fork named".into(), Vec::new(), Vec::new());
     chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_matches!(rx.try_recv(), Ok(AppEvent::FollowTranscript));
     chat.handle_key_event(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
-    assert_matches!(rx.try_recv(), Ok(AppEvent::StartManagedWorktree {
+    assert_matches!(rx.try_recv(), Ok(AppEvent::StartManagedWorktree { initial_prompt: None,
         mode: crate::app_event::ManagedWorktreeMode::Fork,
         name: Some(name),
     }) if name == "named");
     chat.set_local_worktree_operations(/*enabled*/ false);
     chat.dispatch_command(SlashCommand::New);
-    assert_matches!(rx.try_recv(), Ok(AppEvent::NewSession { name: None }));
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::NewSession {
+            initial_prompt: None,
+            name: None
+        })
+    );
     chat.dispatch_command(SlashCommand::Fork);
     assert_matches!(
         rx.try_recv(),

@@ -22,10 +22,22 @@ impl ChatWidget {
         mode: ManagedWorktreeMode,
         name: Option<String>,
     ) {
+        self.show_session_checkout_picker_with_prompt(mode, name, None);
+    }
+
+    pub(super) fn show_session_checkout_picker_with_prompt(
+        &mut self,
+        mode: ManagedWorktreeMode,
+        name: Option<String>,
+        initial_prompt: Option<String>,
+    ) {
         if !self.managed_worktree_available() {
             match mode {
                 ManagedWorktreeMode::New => {
-                    self.app_event_tx.send(AppEvent::NewSession { name });
+                    self.app_event_tx.send(AppEvent::NewSession {
+                        name,
+                        initial_prompt,
+                    });
                 }
                 ManagedWorktreeMode::Fork => {
                     self.app_event_tx
@@ -40,6 +52,7 @@ impl ChatWidget {
             ManagedWorktreeMode::Fork => "Where should the forked conversation run?",
         };
         let current_name = name.clone();
+        let current_prompt = initial_prompt.clone();
         self.bottom_pane.show_selection_view(SelectionViewParams {
             title: Some(title.into()),
             items: vec![
@@ -50,6 +63,7 @@ impl ChatWidget {
                         ManagedWorktreeMode::New => {
                             tx.send(AppEvent::NewSession {
                                 name: current_name.clone(),
+                                initial_prompt: current_prompt.clone(),
                             });
                         }
                         ManagedWorktreeMode::Fork => {
@@ -71,6 +85,7 @@ impl ChatWidget {
                         tx.send(AppEvent::StartManagedWorktree {
                             mode,
                             name: name.clone(),
+                            initial_prompt: initial_prompt.clone(),
                         });
                     })],
                     dismiss_on_select: true,
@@ -98,6 +113,7 @@ impl ChatWidget {
                         tx.send(AppEvent::StartManagedWorktree {
                             mode: ManagedWorktreeMode::Fork,
                             name: None,
+                            initial_prompt: None,
                         });
                     })],
                     dismiss_on_select: true,
@@ -110,6 +126,7 @@ impl ChatWidget {
                         tx.send(AppEvent::StartManagedWorktree {
                             mode: ManagedWorktreeMode::New,
                             name: None,
+                            initial_prompt: None,
                         });
                     })],
                     dismiss_on_select: true,
