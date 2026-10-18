@@ -145,6 +145,83 @@ fn assert_discovery(
 }
 
 #[tokio::test]
+async fn ancestor_trust_applies_to_both_loaders_and_runtime_config() -> anyhow::Result<()> {
+    use crate::config_toml::ConfigToml;
+    use codex_protocol::config_types::TrustLevel;
+
+    let fixture = Fixture::new()?;
+    std::fs::write(&fixture.managed, "project_root_markers = [\".git\"]\n")?;
+    // Trust a directory above the checkout, not the checkout itself.
+    let parent = TomlValue::String(project_trust_key(fixture._temp.path()));
+    let parent_trust = format!("[projects.{parent}]\ntrust_level = 'trusted'\n");
+    let repo = TomlValue::String(project_trust_key(fixture.repo.as_path()));
+    let cases = [
+        (parent_trust.clone(), TrustLevel::Trusted),
+        (
+            format!("{parent_trust}[projects.{repo}]\ntrust_level = 'untrusted'\n"),
+            TrustLevel::Untrusted,
+        ),
+    ];
+    for (user, expected) in cases {
+        std::fs::write(fixture.home.join("config.toml"), &user)?;
+        let (canonical, local) = fixture.load().await?;
+        let dirs = if expected == TrustLevel::Trusted {
+            vec![&fixture.repo, &fixture.project, &fixture.cwd]
+        } else {
+            vec![]
+        };
+        assert_discovery(&canonical, &local, &dirs, &[".git"])?;
+        let config: ConfigToml = toml::from_str(&user)?;
+        assert_eq!(
+            config
+                .get_active_project(fixture.cwd.as_path(), Some(fixture.repo.as_path()))
+                .unwrap()
+                .trust_level,
+            Some(expected),
+        );
+    }
+    // A nested repository still inherits parent-folder trust.
+    std::fs::create_dir(fixture.project.join(".git"))?;
+    std::fs::write(fixture.project.join(".git/HEAD"), "ref: refs/heads/main\n")?;
+    std::fs::write(fixture.home.join("config.toml"), &parent_trust)?;
+    let (canonical, local) = fixture.load().await?;
+    assert_discovery(
+        &canonical,
+        &local,
+        &[&fixture.project, &fixture.cwd],
+        &[".git"],
+    )?;
+    // The nearest ancestor decision wins when neither checkout has an exact entry.
+    let project = TomlValue::String(project_trust_key(fixture.project.as_path()));
+    std::fs::write(
+        fixture.home.join("config.toml"),
+        format!("{parent_trust}[projects.{project}]\ntrust_level = 'untrusted'\n"),
+    )?;
+    let (canonical, local) = fixture.load().await?;
+    assert_discovery(&canonical, &local, &[], &[".git"])?;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn ancestor_trust_does_not_follow_symlinks_outside_trusted_folder() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new()?;
+    let trusted = fixture._temp.path().join("trusted");
+    std::fs::create_dir(&trusted)?;
+    std::os::unix::fs::symlink(fixture.repo.as_path(), trusted.join("link"))?;
+    fixture.cwd = AbsolutePathBuf::from_absolute_path(trusted.join("link/project/child"))?;
+    let parent = TomlValue::String(project_trust_key(&trusted));
+    std::fs::write(
+        fixture.home.join("config.toml"),
+        format!("[projects.{parent}]\ntrust_level = 'trusted'\n"),
+    )?;
+    std::fs::write(&fixture.managed, "project_root_markers = [\".git\"]\n")?;
+    let (canonical, local) = fixture.load().await?;
+    assert_discovery(&canonical, &local, &[], &[".git"])?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn managed_project_discovery_uses_file_markers_without_changing_precedence()
 -> anyhow::Result<()> {
     let fixture = Fixture::new()?;

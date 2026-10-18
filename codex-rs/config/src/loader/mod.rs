@@ -1079,9 +1079,10 @@ impl ProjectTrustDecision {
 
 impl ProjectTrustContext {
     fn decision_for_dir(&self, dir: &AbsolutePathBuf) -> ProjectTrustDecision {
-        for dir_key in normalized_project_trust_keys(dir.as_path()) {
+        let dir_keys = normalized_project_trust_keys(dir.as_path());
+        for dir_key in &dir_keys {
             if let Some((trust_key, trust_level)) =
-                project_trust_for_lookup_key(&self.projects_trust, &dir_key)
+                project_trust_for_lookup_key(&self.projects_trust, dir_key)
             {
                 return ProjectTrustDecision {
                     trust_level: Some(trust_level),
@@ -1112,6 +1113,19 @@ impl ProjectTrustContext {
                     };
                 }
             }
+        }
+
+        if let Some(trust_key) = dir_keys.first().and_then(|path| {
+            crate::project_trust::ancestor_project_key(
+                path,
+                codex_utils_path_uri::PathConvention::native(),
+                self.projects_trust.keys(),
+            )
+        }) {
+            return ProjectTrustDecision {
+                trust_level: self.projects_trust.get(trust_key).copied(),
+                trust_key: trust_key.clone(),
+            };
         }
 
         ProjectTrustDecision {

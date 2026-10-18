@@ -31,6 +31,7 @@ fn assert_lookup_order(lookup: &ProjectTrustLookup, entries: &[(&str, Option<Tru
             Some(ProjectConfig {
                 trust_level: *trust_level
             }),
+            "expected {key} for {lookup:?}",
         );
         config.projects.as_mut().unwrap().remove(*key);
     }
@@ -88,4 +89,153 @@ fn windows_prefers_exact_normalized_key_then_sorted_aliases() {
             (r"C:\Repo", Some(TrustLevel::Trusted)),
         ],
     );
+}
+
+#[test]
+fn ancestor_trust_is_nearest_and_respects_path_boundaries() {
+    let lookup = ProjectTrustLookup::from_paths(
+        PathConvention::Posix,
+        ProjectTrustPath {
+            original: "/work/repos/project/src".into(),
+            canonical: None,
+        },
+        None,
+    );
+    assert_lookup_order(
+        &lookup,
+        &[
+            ("/work/repos/project", Some(TrustLevel::Untrusted)),
+            ("/work/repos/", Some(TrustLevel::Trusted)),
+            ("/work", Some(TrustLevel::Untrusted)),
+            ("/", Some(TrustLevel::Trusted)),
+        ],
+    );
+    for key in [
+        "/work/repo",
+        "/Work/repos",
+        "work/repos",
+        "/work/repos/project/src/child",
+    ] {
+        assert_eq!(
+            config_with_projects(&[(key, Some(TrustLevel::Trusted))])
+                .get_active_project_for_lookup(&lookup),
+            None,
+            "must not inherit from {key}",
+        );
+    }
+}
+
+#[test]
+fn exact_repository_decisions_precede_ancestor_fallback() {
+    let lookup = ProjectTrustLookup::from_paths(
+        PathConvention::Posix,
+        ProjectTrustPath {
+            original: "/work/project/src".into(),
+            canonical: None,
+        },
+        Some(ProjectTrustPath {
+            original: "/work/project".into(),
+            canonical: None,
+        }),
+    );
+    assert_lookup_order(
+        &lookup,
+        &[
+            ("/work/project/src", None),
+            ("/work/project", Some(TrustLevel::Untrusted)),
+            ("/work", Some(TrustLevel::Trusted)),
+        ],
+    );
+}
+
+#[test]
+fn ancestor_fallback_uses_canonical_path_not_symlink_parent() {
+    let lookup = ProjectTrustLookup::from_paths(
+        PathConvention::Posix,
+        ProjectTrustPath {
+            original: "/trusted/link/project".into(),
+            canonical: Some("/outside/project".into()),
+        },
+        None,
+    );
+    let config = config_with_projects(&[("/trusted", Some(TrustLevel::Trusted))]);
+    assert_eq!(config.get_active_project_for_lookup(&lookup), None);
+    assert_lookup_order(
+        &lookup,
+        &[
+            ("/trusted/link/project", Some(TrustLevel::Trusted)),
+            ("/outside", Some(TrustLevel::Untrusted)),
+        ],
+    );
+}
+
+#[test]
+fn windows_ancestor_trust_handles_drives_unc_and_extended_paths() {
+    for (cwd, parent, outside) in [
+        (r"C:\Work\Repo\src", r"c:\work", r"C:\Wor"),
+        (r"\\?\C:\Work\Repo", r"C:\WORK", r"D:\Work"),
+        (r"\\server\share\Repo", r"\\SERVER\share", r"\\server\other"),
+        (r"\\?\UNC\server\share\Repo", r"\\server\share", r"\\server"),
+    ] {
+        let lookup = ProjectTrustLookup::from_paths(
+            PathConvention::Windows,
+            ProjectTrustPath {
+                original: cwd.into(),
+                canonical: None,
+            },
+            None,
+        );
+        assert_lookup_order(&lookup, &[(parent, Some(TrustLevel::Trusted))]);
+        assert_eq!(
+            config_with_projects(&[(outside, Some(TrustLevel::Trusted))])
+                .get_active_project_for_lookup(&lookup),
+            None,
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_ancestor_trust_resolves_symlinks_and_preserves_repo_denials() -> anyhow::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let trusted = temp.path().join("trusted");
+    let outside = temp.path().join("outside");
+    let repo = trusted.join("repo");
+    std::fs::create_dir_all(repo.join("src"))?;
+    std::fs::create_dir_all(&outside)?;
+    std::os::unix::fs::symlink(&outside, trusted.join("escape"))?;
+    std::os::unix::fs::symlink(&repo, temp.path().join("alias"))?;
+    let parent_key = trusted.to_str().unwrap();
+    let repo_key = repo.to_str().unwrap();
+    let config = config_with_projects(&[(parent_key, Some(TrustLevel::Trusted))]);
+    assert_eq!(
+        config
+            .get_active_project(&repo.join("src"), Some(&repo))
+            .unwrap()
+            .trust_level,
+        Some(TrustLevel::Trusted)
+    );
+    assert_eq!(
+        config
+            .get_active_project(&temp.path().join("alias/src"), None)
+            .unwrap()
+            .trust_level,
+        Some(TrustLevel::Trusted)
+    );
+    assert_eq!(
+        config.get_active_project(&trusted.join("escape"), None),
+        None
+    );
+    let config = config_with_projects(&[
+        (parent_key, Some(TrustLevel::Trusted)),
+        (repo_key, Some(TrustLevel::Untrusted)),
+    ]);
+    assert_eq!(
+        config
+            .get_active_project(&repo.join("src"), Some(&repo))
+            .unwrap()
+            .trust_level,
+        Some(TrustLevel::Untrusted)
+    );
+    Ok(())
 }
