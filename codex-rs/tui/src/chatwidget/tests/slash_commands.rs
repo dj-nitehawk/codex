@@ -2881,7 +2881,8 @@ async fn slash_new_with_name_requests_named_session() {
     assert_matches!(
         rx.try_recv(),
         Ok(AppEvent::NewSession {
-            name: Some(name)
+            name: Some(name),
+            initial_prompt: None,
         }) if name == "Add User"
     );
 }

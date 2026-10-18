@@ -26,6 +26,10 @@
 //! The plain-text preset keeps command prefixes literal, including `!`, so Enter and Tab
 //! submit ordinary text without enabling shell mode.
 //!
+//! With commands enabled, Enter on a leading standalone `~` dispatches `/new` with
+//! the whole draft as arguments. Inline-argument preparation expands pasted text before
+//! the new-session parser separates the initial prompt. `~/paths` and `~word` stay literal.
+//!
 //! # Mention Menus
 //!
 //! By default, `@` lists plugins, filesystem entries, and skills. Skills are hidden when their

@@ -39,7 +39,11 @@ async fn worktree_creation_rejects_untrusted_source_before_allocation() -> Resul
         app.handle_event(
             &mut tui,
             &mut app_server,
-            AppEvent::StartManagedWorktree { mode, name: None },
+            AppEvent::StartManagedWorktree {
+                initial_prompt: None,
+                mode,
+                name: None,
+            },
         )
         .await?;
         drain_managed_worktree_start(&mut app, &mut app_server).await;
@@ -83,6 +87,7 @@ async fn worktree_creation_rejects_running_agent_before_allocation() -> Result<(
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: crate::app_event::ManagedWorktreeMode::New,
             name: None,
         },
@@ -248,6 +253,7 @@ async fn misalignment_policy_blocks_queued_turns_and_goal_resumption() -> Result
         },
         AppEvent::ForkCurrentSession { name: None },
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: crate::app_event::ManagedWorktreeMode::Fork,
             name: None,
         },

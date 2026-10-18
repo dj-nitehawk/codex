@@ -126,8 +126,9 @@ use crate::app_event::HistoryBatchEntryResponse;
 use crate::test_support::boxed_future;
 
 async fn drain_managed_worktree_start(app: &mut App, server: &mut AppServerSession) {
-    if let Some((mode, name)) = app.pending_start_managed_worktree.take() {
-        app.start_managed_worktree(server, mode, name).await;
+    if let Some((mode, name, initial_prompt)) = app.pending_start_managed_worktree.take() {
+        app.start_managed_worktree(server, mode, name, initial_prompt)
+            .await;
     }
 }
 use codex_utils_absolute_path::test_support::PathExt;

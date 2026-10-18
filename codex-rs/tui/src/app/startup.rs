@@ -1246,11 +1246,14 @@ See the Codex keymap documentation for supported actions and examples."
                     .await;
                     continue;
                 }
-                if let Some((mode, name)) = app.pending_start_managed_worktree.take() {
+                if let Some((mode, name, initial_prompt)) =
+                    app.pending_start_managed_worktree.take()
+                {
                     Box::pin(app.start_managed_worktree(
                         backends.session_at_mut(displayed_session),
                         mode,
                         name,
+                        initial_prompt,
                     ))
                     .await;
                     continue;
