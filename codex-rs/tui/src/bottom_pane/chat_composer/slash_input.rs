@@ -109,6 +109,14 @@ impl<'a> SlashInput<'a> {
             return None;
         }
 
+        if is_new_session_shorthand(text) {
+            return Some(InlineCommand {
+                command: SlashCommandItem::Builtin(SlashCommand::New),
+                rest: text,
+                rest_offset: 0,
+            });
+        }
+
         let (name, rest, rest_offset) = parse_slash_name(text)?;
         if rest.is_empty() || name.contains('/') {
             return None;
@@ -542,7 +550,15 @@ pub(super) fn selected_command_completion(
         .then(|| format!("{selected_command_text} "))
 }
 
+fn is_new_session_shorthand(text: &str) -> bool {
+    text.strip_prefix('~')
+        .is_some_and(|rest| rest.chars().next().is_none_or(char::is_whitespace))
+}
+
 pub(super) fn prepared_args(prepared_text: &str) -> Option<(&str, usize)> {
+    if is_new_session_shorthand(prepared_text) {
+        return Some((prepared_text, 0));
+    }
     let (_, prepared_rest, prepared_rest_offset) = parse_slash_name(prepared_text)?;
     Some((prepared_rest, prepared_rest_offset))
 }
@@ -618,6 +634,33 @@ mod tests {
     use crate::bottom_pane::AppEventSender;
     use pretty_assertions::assert_eq;
     use tokio::sync::mpsc::unbounded_channel;
+
+    #[test]
+    fn new_session_prompt_shorthand_boundaries_and_disabled_modes() {
+        let mut composer = test_composer();
+        for text in [
+            "~",
+            "~ Explain this",
+            "~\nExplain ~ literal",
+            "~\tExplain this",
+        ] {
+            let command = composer.slash_input().inline_command(text).unwrap();
+            assert!(matches!(
+                command.command,
+                SlashCommandItem::Builtin(SlashCommand::New)
+            ));
+            assert_eq!(command.rest, text);
+            assert_eq!(command.rest_offset, 0);
+            assert_eq!(prepared_args(text), Some((text, 0)));
+        }
+        for text in ["~/project", "~word", "a~b", "text ~ prompt", " ~ prompt"] {
+            assert!(composer.slash_input().inline_command(text).is_none());
+        }
+        composer.draft.is_bash_mode = true;
+        assert!(composer.slash_input().inline_command("~ prompt").is_none());
+        let input = SlashInput::new(false, false, composer.builtin_command_flags(), &[]);
+        assert!(input.inline_command("~ prompt").is_none());
+    }
 
     fn test_composer() -> ChatComposer {
         let (tx, _rx) = unbounded_channel::<AppEvent>();

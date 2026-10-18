@@ -978,9 +978,17 @@ impl ChatWidget {
                 self.app_event_tx.set_thread_name(name);
             }
             SlashCommand::New if !trimmed.is_empty() => {
-                self.show_session_checkout_picker(
+                let (name, initial_prompt) = match crate::new_session_prompt::parse(&args) {
+                    Ok(parsed) => parsed,
+                    Err(error) => {
+                        self.add_error_message(error.to_string());
+                        return;
+                    }
+                };
+                self.show_session_checkout_picker_with_prompt(
                     ManagedWorktreeMode::New,
-                    Some(trimmed.to_string()),
+                    name,
+                    initial_prompt,
                 );
             }
             SlashCommand::Clear if !trimmed.is_empty() => {

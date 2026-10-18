@@ -907,7 +907,10 @@ async fn backend_handoff_errors_are_snapshotted() -> Result<()> {
         &mut tui,
         &mut backends,
         destination_id,
-        crate::app::backend_selection::NewBackendSession::Fresh { name: None },
+        crate::app::backend_selection::NewBackendSession::Fresh {
+            name: None,
+            initial_prompt: None,
+        },
     )
     .await
     .expect("trust failure is shown in the conversation");

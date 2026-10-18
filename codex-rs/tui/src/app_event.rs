@@ -110,6 +110,7 @@ pub(crate) struct ManagedWorktreeTransition {
     pub(crate) config: Box<crate::legacy_core::config::Config>,
     pub(crate) mode: ManagedWorktreeMode,
     pub(crate) name: Option<String>,
+    pub(crate) initial_prompt: Option<String>,
 }
 
 #[derive(Debug)]
@@ -118,6 +119,7 @@ pub(crate) struct ManagedWorktreeCreated {
     pub(crate) source_cwd: AbsolutePathBuf,
     pub(crate) mode: ManagedWorktreeMode,
     pub(crate) name: Option<String>,
+    pub(crate) initial_prompt: Option<String>,
     pub(crate) result: Result<
         (
             codex_worktree::WorktreeManager,
@@ -649,19 +651,22 @@ pub(crate) enum AppEvent {
         log_id: u64,
     },
 
-    /// Start a new session, optionally assigning it a name.
+    /// Start a new session, optionally assigning it a name and initial text prompt.
     NewSession {
         name: Option<String>,
+        initial_prompt: Option<String>,
     },
 
     /// Resolve the /new host before offering choices about the displayed checkout.
     ChooseNewSessionCheckout {
         name: Option<String>,
+        initial_prompt: Option<String>,
     },
 
     /// Start on the current worktree's host, ignoring the saved new-thread host.
     NewSessionInCurrentWorktree {
         name: Option<String>,
+        initial_prompt: Option<String>,
     },
 
     /// Move an empty conversation to the next connected backend.
@@ -676,6 +681,7 @@ pub(crate) enum AppEvent {
     StartManagedWorktree {
         mode: ManagedWorktreeMode,
         name: Option<String>,
+        initial_prompt: Option<String>,
     },
     /// Continue a checkout transition after synchronous Git work finishes off-loop.
     ManagedWorktreeCreated(Box<ManagedWorktreeCreated>),

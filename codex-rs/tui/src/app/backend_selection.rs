@@ -13,7 +13,10 @@ use codex_app_server_protocol::ThreadItemPayload;
 use futures::TryFutureExt;
 
 pub(super) enum NewBackendSession {
-    Fresh { name: Option<String> },
+    Fresh {
+        name: Option<String>,
+        initial_prompt: Option<String>,
+    },
     CarryDraft,
 }
 
@@ -166,11 +169,15 @@ impl App {
         let user_config_path = self.local_settings.user_config_path.clone();
         let responsive_cloud_switch = settings.target == AppServerTarget::Cloud
             && matches!(session, NewBackendSession::CarryDraft);
-        let (name, mut draft) = match session {
-            NewBackendSession::Fresh { name } => (name, None),
+        let (name, mut draft, initial_prompt) = match session {
+            NewBackendSession::Fresh {
+                name,
+                initial_prompt,
+            } => (name, None, initial_prompt),
             NewBackendSession::CarryDraft => (
                 self.chat_widget.thread_name(),
                 (!responsive_cloud_switch).then(|| self.chat_widget.composer_draft_snapshot()),
+                None,
             ),
         };
         let destination = backends.session_at_mut(slot);
@@ -280,7 +287,7 @@ impl App {
                 local_settings,
             },
             ThreadAttachPresentation::FreshAfterClear,
-            /*initial_user_message*/ None,
+            initial_prompt.map(Into::into),
             name,
         )
         .await;

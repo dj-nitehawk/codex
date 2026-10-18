@@ -4623,7 +4623,7 @@ async fn managed_worktree_transitions_bind_owner_and_preserve_only_fork_history(
     let project_pool = dunce::canonicalize(root.path())?.join("project-pool");
     fs::create_dir_all(&home)?;
     fs::create_dir_all(source.join(".codex"))?;
-    fs::write(home.join("config.toml"), "[features]\nworktrees = true\n")?;
+    fs::write(home.join("config.toml"), "")?;
     crate::legacy_core::config::set_project_trust_level(
         &home,
         &source,
@@ -4721,6 +4721,7 @@ model_reasoning_effort = "low"
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: ManagedWorktreeMode::Fork,
             name: None,
         },
@@ -4794,6 +4795,7 @@ terminal_visualization_instructions = true
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: ManagedWorktreeMode::Fork,
             name: None,
         },
@@ -4818,6 +4820,7 @@ terminal_visualization_instructions = true
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: ManagedWorktreeMode::New,
             name: None,
         },
@@ -4895,6 +4898,7 @@ terminal_visualization_instructions = true
             AppEvent::StartManagedWorktree {
                 mode,
                 name: Some(format!("{mode:?} worktree")),
+                initial_prompt: None,
             },
         )
         .await?;
@@ -5070,7 +5074,11 @@ terminal_visualization_instructions = true
         app.handle_event(
             &mut tui,
             &mut server,
-            AppEvent::StartManagedWorktree { mode, name: None },
+            AppEvent::StartManagedWorktree {
+                initial_prompt: None,
+                mode,
+                name: None,
+            },
         )
         .await?;
         drain_managed_worktree_start(&mut app, &mut server).await;
@@ -5689,7 +5697,7 @@ fn fresh_session_keeps_its_name_and_draft_when_cycling_backends() -> Result<()> 
                 app.handle_event(
                     &mut tui,
                     backends.session_at_mut(backends.displayed),
-                    AppEvent::ChooseNewSessionCheckout { name: None },
+                    AppEvent::ChooseNewSessionCheckout { name: None, initial_prompt: None },
                 ).await?;
                 assert!(render_bottom_popup(&app.chat_widget, /*width*/ 80).contains("Use current Git worktree"));
                 app.chat_widget.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -5779,7 +5787,7 @@ fn fresh_session_keeps_its_name_and_draft_when_cycling_backends() -> Result<()> 
                     &mut tui,
                     &mut backends,
                     destination,
-                    crate::app::backend_selection::NewBackendSession::Fresh { name: None },
+                    crate::app::backend_selection::NewBackendSession::Fresh { name: None, initial_prompt: None },
                 )
                 .await
                 .expect("start without an explicit default change");
@@ -6111,6 +6119,8 @@ fn session_lifecycle_avoids_redundant_subagent_metadata_reads() -> Result<()> {
         .expect("session lifecycle request test thread")
 }
 
+#[path = "new_session_prompt_tests.rs"]
+mod new_session_prompt_tests;
 #[path = "new_session_tests.rs"]
 mod new_session_tests;
 #[path = "startup_defaults_tests.rs"]

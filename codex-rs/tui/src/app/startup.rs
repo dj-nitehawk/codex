@@ -1383,11 +1383,14 @@ See the Codex keymap documentation for supported actions and examples."
                     .await;
                     continue;
                 }
-                if let Some((mode, name)) = app.pending_start_managed_worktree.take() {
+                if let Some((mode, name, initial_prompt)) =
+                    app.pending_start_managed_worktree.take()
+                {
                     Box::pin(app.start_managed_worktree(
                         backends.session_at_mut(displayed_session),
                         mode,
                         name,
+                        initial_prompt,
                     ))
                     .await;
                     continue;
@@ -1502,9 +1505,9 @@ See the Codex keymap documentation for supported actions and examples."
                     }
                     Some(event) = app.saved_openings.next_event(&mut app_event_rx) => {
                         let switch_backend = match &event {
-                            AppEvent::ChooseNewSessionCheckout { name } | AppEvent::NewSession { name }
+                            AppEvent::ChooseNewSessionCheckout { name, initial_prompt } | AppEvent::NewSession { name, initial_prompt }
                                 if multi_backend => app.other_new_session_backend(&backends).await
-                                    .map(|owner| (owner, NewBackendSession::Fresh { name: name.clone() })),
+                                    .map(|owner| (owner, NewBackendSession::Fresh { name: name.clone(), initial_prompt: initial_prompt.clone() })),
                             AppEvent::CycleNewConversationBackend => {
                                 let Some(owner) = next_backend else { continue };
                                 Some((owner, NewBackendSession::CarryDraft))
