@@ -109,6 +109,7 @@ pub(crate) struct ManagedWorktreeTransition {
     pub(crate) config: Box<crate::legacy_core::config::Config>,
     pub(crate) mode: ManagedWorktreeMode,
     pub(crate) name: Option<String>,
+    pub(crate) initial_prompt: Option<String>,
 }
 
 #[derive(Debug)]
@@ -117,6 +118,7 @@ pub(crate) struct ManagedWorktreeCreated {
     pub(crate) source_cwd: AbsolutePathBuf,
     pub(crate) mode: ManagedWorktreeMode,
     pub(crate) name: Option<String>,
+    pub(crate) initial_prompt: Option<String>,
     pub(crate) result: Result<
         (
             codex_worktree::WorktreeManager,
@@ -551,15 +553,17 @@ pub(crate) enum AppEvent {
         log_id: u64,
     },
 
-    /// Start a new session, optionally assigning it a name.
+    /// Start a new session, optionally assigning it a name and initial text prompt.
     NewSession {
         name: Option<String>,
+        initial_prompt: Option<String>,
     },
 
     /// Create a managed checkout and start or fork a session into it.
     StartManagedWorktree {
         mode: ManagedWorktreeMode,
         name: Option<String>,
+        initial_prompt: Option<String>,
     },
     /// Continue a checkout transition after synchronous Git work finishes off-loop.
     ManagedWorktreeCreated(Box<ManagedWorktreeCreated>),

@@ -63,6 +63,7 @@ impl App {
         app_server: &mut AppServerSession,
         mode: crate::app_event::ManagedWorktreeMode,
         name: Option<String>,
+        initial_prompt: Option<String>,
     ) {
         if self.config.active_project.is_untrusted() {
             self.chat_widget.add_error_message(
@@ -208,6 +209,7 @@ impl App {
                                 source_cwd,
                                 mode,
                                 name,
+                                initial_prompt,
                                 result,
                             },
                         )));
@@ -279,6 +281,7 @@ impl App {
             config: Box::new(config),
             mode: created.mode,
             name: created.name,
+            initial_prompt: created.initial_prompt,
         }));
     }
 

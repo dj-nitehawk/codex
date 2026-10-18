@@ -662,7 +662,11 @@ pub(crate) struct App {
     /// Runs a requested /cd after event dispatch returns, with a fresh stack.
     pending_working_directory_change: Option<working_directory::PendingWorkingDirectoryChange>,
     /// Starts worktree setup after the event handler returns, with a fresh stack.
-    pending_start_managed_worktree: Option<(crate::app_event::ManagedWorktreeMode, Option<String>)>,
+    pending_start_managed_worktree: Option<(
+        crate::app_event::ManagedWorktreeMode,
+        Option<String>,
+        Option<String>,
+    )>,
     pending_managed_worktree_creation: bool,
     /// Defers checkout completion and config loading until the event handler returns.
     pending_managed_worktree_created: Option<Box<crate::app_event::ManagedWorktreeCreated>>,

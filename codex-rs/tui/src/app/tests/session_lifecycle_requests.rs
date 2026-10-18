@@ -3768,7 +3768,7 @@ async fn managed_worktree_transitions_bind_owner_and_preserve_only_fork_history(
     let project_pool = dunce::canonicalize(root.path())?.join("project-pool");
     fs::create_dir_all(&home)?;
     fs::create_dir_all(source.join(".codex"))?;
-    fs::write(home.join("config.toml"), "[features]\nworktrees = true\n")?;
+    fs::write(home.join("config.toml"), "")?;
     crate::legacy_core::config::set_project_trust_level(
         &home,
         &source,
@@ -3866,6 +3866,7 @@ model_reasoning_effort = "low"
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: ManagedWorktreeMode::Fork,
             name: None,
         },
@@ -3939,6 +3940,7 @@ terminal_visualization_instructions = true
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: ManagedWorktreeMode::Fork,
             name: None,
         },
@@ -3963,6 +3965,7 @@ terminal_visualization_instructions = true
         &mut tui,
         &mut server,
         AppEvent::StartManagedWorktree {
+            initial_prompt: None,
             mode: ManagedWorktreeMode::New,
             name: None,
         },
@@ -4040,6 +4043,7 @@ terminal_visualization_instructions = true
             AppEvent::StartManagedWorktree {
                 mode,
                 name: Some(format!("{mode:?} worktree")),
+                initial_prompt: None,
             },
         )
         .await?;
@@ -4215,7 +4219,11 @@ terminal_visualization_instructions = true
         app.handle_event(
             &mut tui,
             &mut server,
-            AppEvent::StartManagedWorktree { mode, name: None },
+            AppEvent::StartManagedWorktree {
+                initial_prompt: None,
+                mode,
+                name: None,
+            },
         )
         .await?;
         drain_managed_worktree_start(&mut app, &mut server).await;
@@ -5071,6 +5079,8 @@ fn session_lifecycle_avoids_redundant_subagent_metadata_reads() -> Result<()> {
         .expect("session lifecycle request test thread")
 }
 
+#[path = "new_session_prompt_tests.rs"]
+mod new_session_prompt_tests;
 #[path = "new_session_tests.rs"]
 mod new_session_tests;
 #[path = "startup_defaults_tests.rs"]
