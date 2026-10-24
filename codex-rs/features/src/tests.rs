@@ -962,12 +962,12 @@ code_mode = true
 }
 
 #[test]
-fn retired_worktree_and_voice_config_overrides_are_ignored() {
+fn retired_voice_config_overrides_are_ignored() {
     for enabled in [false, true] {
-        let features_toml = FeaturesToml::from(BTreeMap::from([
-            ("worktrees".to_string(), enabled),
-            ("realtime_conversation".to_string(), enabled),
-        ]));
+        let features_toml = FeaturesToml::from(BTreeMap::from([(
+            "realtime_conversation".to_string(),
+            enabled,
+        )]));
         let features = Features::from_sources(
             FeatureConfigSource {
                 features: Some(&features_toml),
@@ -977,5 +977,23 @@ fn retired_worktree_and_voice_config_overrides_are_ignored() {
             FeatureOverrides::default(),
         );
         assert_eq!(features, Features::with_defaults());
+    }
+}
+
+#[test]
+fn worktrees_config_controls_checkout_choices() {
+    assert!(Features::with_defaults().enabled(Feature::Worktrees));
+    for enabled in [false, true] {
+        let features_toml: FeaturesToml =
+            toml::from_str(&format!("worktrees = {enabled}")).unwrap();
+        let features = Features::from_sources(
+            FeatureConfigSource {
+                features: Some(&features_toml),
+                ..Default::default()
+            },
+            FeatureConfigSource::default(),
+            FeatureOverrides::default(),
+        );
+        assert_eq!(features.enabled(Feature::Worktrees), enabled);
     }
 }

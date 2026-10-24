@@ -28,6 +28,17 @@ for the next new chat. Existing permission and startup checks still apply.
 The prompt uses normal message persistence and is available when resuming a
 saved chat. Ephemeral chats retain their existing persistence behavior.
 
+To skip the checkout picker and always use the current directory for `/new`,
+`/fork`, and `~ <prompt>`, set this fork-supported preference in `config.toml`:
+
+```toml
+[features]
+worktrees = false
+```
+
+The default is `true`. This preference only controls the conversation checkout
+picker, not `/worktree`, worktree tools, or repository-aware session discovery.
+
 This extension supports text prompts, not transferring image attachments or
 structured mentions from the old composer. `/fork`, `/clear`, and `/handoff`
 are unchanged.

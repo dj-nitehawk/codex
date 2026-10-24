@@ -90,6 +90,60 @@ async fn slash_new_prompt_rejects_empty_prompt_without_starting_session() {
 }
 
 #[tokio::test]
+async fn slash_new_and_fork_skip_checkout_choices_when_worktrees_disabled() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None).await;
+    let checkout = tempdir().unwrap();
+    std::fs::create_dir(checkout.path().join(".git")).unwrap();
+    std::fs::write(checkout.path().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    chat.config.cwd = AbsolutePathBuf::from_absolute_path(checkout.path()).unwrap();
+    chat.set_local_worktree_operations(true);
+    chat.config.features.disable(Feature::Worktrees).unwrap();
+
+    // The preference skips the picker, not the underlying local worktree tools.
+    assert!(chat.managed_worktree_available());
+    chat.dispatch_command(SlashCommand::New);
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::NewSession {
+            name: None,
+            initial_prompt: None
+        })
+    );
+    chat.dispatch_command(SlashCommand::Fork);
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::ForkCurrentSession { name: None })
+    );
+
+    for (input, expected_name, expected_prompt) in [
+        ("/new named", Some("named"), None),
+        ("/fork named", Some("named"), None),
+        ("/new named ~ Fix login", Some("named"), Some("Fix login")),
+        ("~ Fix login", None, Some("Fix login")),
+    ] {
+        chat.bottom_pane
+            .set_composer_text(input.into(), Vec::new(), Vec::new());
+        chat.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_matches!(rx.try_recv(), Ok(AppEvent::FollowTranscript));
+        match rx.try_recv().unwrap() {
+            AppEvent::NewSession {
+                name,
+                initial_prompt,
+            } if !input.starts_with("/fork") => {
+                assert_eq!(name.as_deref(), expected_name);
+                assert_eq!(initial_prompt.as_deref(), expected_prompt);
+            }
+            AppEvent::ForkCurrentSession { name } if input.starts_with("/fork") => {
+                assert_eq!(name.as_deref(), expected_name);
+            }
+            event => panic!("unexpected event: {event:?}"),
+        }
+        assert!(rx.try_recv().is_err());
+        assert!(!render_bottom_popup(&chat, 80).contains("Where should"));
+    }
+}
+
+#[tokio::test]
 async fn slash_new_and_fork_offer_checkout_choices_inside_local_git_repository() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.set_local_worktree_operations(/*enabled*/ false);
