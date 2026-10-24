@@ -12373,6 +12373,7 @@ async fn explicit_feature_config_is_normalized_by_requirements() -> std::io::Res
 [features]
 view_image = false
 shell_tool = true
+worktrees = true
 "#,
     )?;
 
@@ -12385,6 +12386,7 @@ shell_tool = true
 [features]
 view_image = true
 shell_tool = false
+worktrees = false
 "#,
             ),
         )
@@ -12393,6 +12395,7 @@ shell_tool = false
 
     assert!(config.features.enabled(Feature::ViewImage));
     assert!(!config.features.enabled(Feature::ShellTool));
+    assert!(!config.features.enabled(Feature::Worktrees));
     assert!(
         !config
             .startup_warnings
@@ -12407,7 +12410,6 @@ shell_tool = false
 
 #[test_case::test_case(Feature::Personality; "personality")]
 #[test_case::test_case(Feature::GuardianThreadContext; "guardian thread context")]
-#[test_case::test_case(Feature::Worktrees; "worktrees")]
 #[test_case::test_case(Feature::RealtimeConversation; "realtime conversation")]
 #[test_case::test_case(Feature::ShellZshFork; "shell zsh fork")]
 #[test_case::test_case(Feature::UnifiedExecZshFork; "unified exec zsh fork")]
@@ -12461,7 +12463,7 @@ fn retired_feature_requirements_do_not_pin_configured_values(
                 usize::from(feature != Feature::Personality),
             ),
         );
-        if matches!(feature, Feature::Worktrees | Feature::RealtimeConversation) {
+        if feature == Feature::RealtimeConversation {
             assert!(
                 warnings[0].contains(&format!("Ignoring removed `features` requirement `{key}`"))
             );

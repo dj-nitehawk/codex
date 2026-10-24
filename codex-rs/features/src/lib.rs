@@ -241,7 +241,7 @@ pub enum Feature {
     NetworkProxy,
     /// Mask credentials and inject them through an already enabled network proxy.
     CredentialMasking,
-    /// Removed compatibility flag. Managed worktrees and repository-aware sessions are always available.
+    /// Offer checkout choices for new and forked TUI conversations.
     Worktrees,
     /// Respect host system proxy settings for Codex-owned network clients.
     RespectSystemProxy,
@@ -755,7 +755,7 @@ impl Features {
                     self.record_legacy_usage_force("features.transcript_v2", Feature::TranscriptV2);
                     continue;
                 }
-                "tui_app_server" | "worktrees" | "realtime_conversation" => {
+                "tui_app_server" | "realtime_conversation" => {
                     continue;
                 }
                 "undo" => {
@@ -1627,7 +1627,7 @@ pub const FEATURES: &[FeatureSpec] = &[
     FeatureSpec {
         id: Feature::Worktrees,
         key: "worktrees",
-        stage: Stage::Removed,
+        stage: Stage::Stable,
         default_enabled: true,
     },
     FeatureSpec {

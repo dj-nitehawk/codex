@@ -234,7 +234,8 @@ impl App {
             AppEvent::PluginMentionsLoaded { ref cwd, .. }
                 if cwds_differ(cwd, self.config.cwd.as_path()) => {}
             AppEvent::ChooseNewSessionCheckout { name, initial_prompt }
-                if self.chat_widget.managed_worktree_available() =>
+                if self.config.features.enabled(Feature::Worktrees)
+                    && self.chat_widget.managed_worktree_available() =>
             {
                 self.chat_widget.open_session_checkout_picker(
                     crate::app_event::ManagedWorktreeMode::New, name, initial_prompt,

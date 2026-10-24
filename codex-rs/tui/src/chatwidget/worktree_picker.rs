@@ -40,7 +40,7 @@ impl ChatWidget {
             });
             return;
         }
-        if !self.managed_worktree_available() {
+        if !self.config.features.enabled(Feature::Worktrees) || !self.managed_worktree_available() {
             match mode {
                 ManagedWorktreeMode::New => {
                     self.app_event_tx.send(AppEvent::NewSession {
